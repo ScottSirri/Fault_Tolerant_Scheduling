@@ -7,7 +7,7 @@ class Selector:
     family = []
 
     def __init__(self, in_n, in_k, in_r):
-        self.n = in_n + 1
+        self.n = in_n
         self.k = in_k
         self.r = in_r
 
@@ -22,6 +22,13 @@ class Selector:
                     return INVALID
         return VALID
 
+    def print_sel(self):
+        print(f"Candidate selector({self.n}, {self.k}, {self.r}):")
+        for sel_set in self.family:
+            print("\t", end='')
+            print(sel_set)
+        print()
+
 sel = Selector(4, 2, 2)
 
 # Test input
@@ -31,10 +38,7 @@ sel.family.append([1,3])
 sel.family.append([0,2])
 if sel.validate() != VALID:
     print("======================== Invalid selector ========================")
-
-print(f"Selector({sel.n - 1}):")
-print(sel.family)
-print()
+sel.print_sel()
 
 z_vars = []
 x_vars = []
@@ -96,8 +100,8 @@ for v in range(sel.n):
     dv = []
     for i in range(len(sel.family)):
         dv.append(div_vars[i][v])
-    cv_constraint_lower = (-1 + 1.0/F <= cv - (1.0/F)*lpSum(dv), f"c{v}_lower")
-    cv_constraint_upper = (              cv - (1.0/F)*lpSum(dv) <= 0, f"c{v}_upper")
+    cv_constraint_lower = (-1 + (1.0/F) <= cv - (1.0/F)*lpSum(dv), f"c{v}_lower")
+    cv_constraint_upper = (                cv - (1.0/F)*lpSum(dv) <= 0, f"c{v}_upper")
     model += cv_constraint_lower
     model += cv_constraint_upper
 
@@ -111,8 +115,10 @@ for v in range(sel.n):
         for var in sel.family[i]:
             if var != v:
                 x_i_not_v.append(x_vars[var])
-        div_constraint_lower = (0 <= div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)), f"d,i{i},v{v},lower")
-        div_constraint_upper = (     div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)) <= 1 - (1.0/Si), f"d,i{i},v{v},upper")
+        div_constraint_lower = (0 <= div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)), 
+                f"d,i{i},v{v},lower")
+        div_constraint_upper = (     div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)) <= 1 - (1.0/Si), 
+                f"d,i{i},v{v},upper")
 
         model += div_constraint_lower
         model += div_constraint_upper
@@ -120,8 +126,13 @@ for v in range(sel.n):
 # Objective function
 model += lpSum(z_vars)
 
+print("======================== print(model) ========================")
 print(model)
+
+print("======================== model.solve() ========================")
 status = model.solve()
+
+print("======================== Manually printing model info ========================")
 
 print(f"status: {model.status}, {LpStatus[model.status]}")
 
