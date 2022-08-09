@@ -1,4 +1,5 @@
 from pulp import LpMaximize, LpMinimize, LpProblem, LpStatus, lpSum, LpVariable
+import sys
 
 VALID = 0
 INVALID = -1
@@ -60,17 +61,22 @@ for sel_set in sel.family:
 # LP model
 model = LpProblem(name="small-problem", sense=LpMinimize)
 
+category = "Continuous"
+if len(sys.argv) > 1:
+    if sys.argv[1] == "ilp":
+        category = "Integer"
+
 # ==================== LP Variable generation ====================
 for v in range(sel.n):
-    z_vars.append(LpVariable(name = f"z{v}", lowBound = 0))
-    x_vars.append(LpVariable(name = f"x{v}", lowBound = 0))
-    D_vars.append(LpVariable(name = f"D{v}", lowBound = 0))
-    c_vars.append(LpVariable(name = f"c{v}", lowBound = 0))
+    z_vars.append(LpVariable(name = f"z{v}", lowBound = 0, upBound=1, cat=category))
+    x_vars.append(LpVariable(name = f"x{v}", lowBound = 0, upBound=1, cat=category))
+    D_vars.append(LpVariable(name = f"D{v}", lowBound = 0, upBound=1, cat=category))
+    c_vars.append(LpVariable(name = f"c{v}", lowBound = 0, upBound=1, cat=category))
 
 for i in range(len(sel.family)):
     di = []
     for v in range(sel.n):
-        di.append(LpVariable(name = f"d{i},{v}", lowBound = 0))
+        di.append(LpVariable(name = f"d{i},{v}", lowBound = 0, upBound=1, cat=category))
     div_vars.append(di)
 
 # ==================== Constraint generation ====================
