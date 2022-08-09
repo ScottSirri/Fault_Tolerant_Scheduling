@@ -4,18 +4,21 @@ VALID = 0
 INVALID = -1
 
 class Selector:
-   n = -1
-   family = []
+    n = -1
+    family = []
 
-   def validate():
-       if n <= 0:
-           return INVALID
-       for set in family:
-           if type(set) is not list:
-               return INVALID
-           for i in set:
-               if i > n:
-                   return INVALID
+    def __init__(self, in_n):
+        n = in_n
+
+    def validate():
+        if n <= 0:
+            return INVALID
+        for set in family:
+            if type(set) is not list:
+                return INVALID
+            for i in set:
+                if i <= 0 or i > n:
+                    return INVALID
         return VALID
 
 obj = [-1, -2]
