@@ -1,8 +1,11 @@
-from pulp import LpMaximize, LpMinimize, LpProblem, LpStatus, lpSum, LpVariable
+from pulp import LpMaximize, LpMinimize, LpProblem, LpStatus, lpSum, LpVariable, PULP_CBC_CMD
 import sys
 
 VALID = 0
 INVALID = -1
+
+class InputError(Exception):
+    pass
 
 class Selector:
     family = []
@@ -61,10 +64,16 @@ for sel_set in sel.family:
 # LP model
 model = LpProblem(name="small-problem", sense=LpMinimize)
 
-category = "Continuous"
+category = ''
 if len(sys.argv) > 1:
     if sys.argv[1] == "ilp":
         category = "Integer"
+    elif sys.argv[1] == "lp":
+        category = "Continuous"
+    else:
+        raise InputError("Must specify 'ilp' or 'lp'")
+else:
+    raise InputError("Must specify 'ilp' or 'lp'")
 
 # ==================== LP Variable generation ====================
 for v in range(sel.n):
@@ -137,6 +146,7 @@ print(model)
 
 print("======================== model.solve() ========================")
 status = model.solve()
+#status = model.solve(PULP_CBC_CMD(msg=False))
 
 print("======================== Manually printing model info ========================")
 
