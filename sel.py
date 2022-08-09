@@ -16,7 +16,7 @@ class Selector:
         self.r = in_r
 
     def validate(self):
-        if self.n <= 0 or self.k <= 0 or self.r <= 0:
+        if self.n <= 0 or self.k <= 0 or self.r <= 0 or k > n or r > k:
             return INVALID
         for set in self.family:
             if type(set) is not list:
@@ -42,6 +42,7 @@ sel.family.append([1,3])
 sel.family.append([0,2])
 if sel.validate() != VALID:
     print("======================== Invalid selector ========================")
+    raise InputError("Invalid selector")
 sel.print_sel()
 
 z_vars = []
@@ -103,8 +104,8 @@ for v in range(sel.n):
 # Constraint: 0 <= D_{v} - ... <= 2/3
 for v in range(sel.n):
     Dv, zv, xv, cv = D_vars[v], z_vars[v], x_vars[v], c_vars[v]
-    D_constraint_lower = (0 <= Dv - (zv + 1 - xv + cv)/3.0, f"D{v}_lower")
-    D_constraint_upper = (     Dv - (zv + 1 - xv + cv)/3.0 <= 2.0/3.0, f"D{v}_upper")
+    D_constraint_lower = (0 <= Dv - (1.0/3)*(zv + 1 - xv + cv), f"D{v}_lower")
+    D_constraint_upper = (     Dv - (1.0/3)*(zv + 1 - xv + cv) <= 2.0/3.0, f"D{v}_upper")
     model += D_constraint_lower
     model += D_constraint_upper
 
@@ -125,7 +126,7 @@ for v in range(sel.n):
     for i in range(len(sel.family)):
         div = div_vars[i][v]
         yiv = yiv_consts[i][v]
-        Si = len(sel.family[i])
+        Si = len(sel.family[i]) * 1.0
         x_i_not_v = []
         for var in sel.family[i]:
             if var != v:
