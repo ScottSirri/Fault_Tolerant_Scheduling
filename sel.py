@@ -4,31 +4,35 @@ VALID = 0
 INVALID = -1
 
 class Selector:
-    n = -1
     family = []
 
-    def __init__(self, in_n):
-        self.n = in_n
+    def __init__(self, in_n, in_k, in_r):
+        self.n = in_n + 1
+        self.k = in_k
+        self.r = in_r
 
-    def validate():
-        if n <= 0:
+    def validate(self):
+        if self.n <= 0 or self.k <= 0 or self.r <= 0:
             return INVALID
-        for set in family:
+        for set in self.family:
             if type(set) is not list:
                 return INVALID
             for i in set:
-                if i < 0 or i >= n:
+                if i < 0 or i >= self.n:
                     return INVALID
         return VALID
 
-sel = Selector(4)
+sel = Selector(4, 2, 2)
 
 # Test input
 sel.family.append([1,2])
 sel.family.append([2])
 sel.family.append([1,3])
 sel.family.append([0,2])
-print(f"Selector({sel.n}):")
+if sel.validate() != VALID:
+    print("======================== Invalid selector ========================")
+
+print(f"Selector({sel.n - 1}):")
 print(sel.family)
 print()
 
@@ -39,7 +43,7 @@ c_vars = []
 div_vars = []
 
 # Initializing the instance (y variables)
-yiv_vars = []
+yiv_consts = []
 for sel_set in sel.family:
     set_i_list = []
     for i in range(sel.n):
@@ -47,10 +51,10 @@ for sel_set in sel.family:
             set_i_list.append(1)
         else:
             set_i_list.append(0)
-    yiv_vars.append(set_i_list)
+    yiv_consts.append(set_i_list)
 
 # LP model
-model = LpProblem(name="small-problem", sense=LpMaximize)
+model = LpProblem(name="small-problem", sense=LpMinimize)
 
 # ==================== LP Variable generation ====================
 for v in range(sel.n):
@@ -66,18 +70,22 @@ for i in range(len(sel.family)):
     div_vars.append(di)
 
 # ==================== Constraint generation ====================
-    
+
+# Constraint: \sum x_{v} = k
+x_constraint = (lpSum(x_vars) >= sel.k, "x_sum")
+model += x_constraint
+
 # Constraint: D_{v} = 1
 for v in range(sel.n):
     Dv = D_vars[v]
-    D_constraint = (Dv == 1)
+    D_constraint = (Dv == 1, f"D{v}")
     model += D_constraint
 
 # Constraint: 0 <= D_{v} - ... <= 2/3
 for v in range(sel.n):
     Dv, zv, xv, cv = D_vars[v], z_vars[v], x_vars[v], c_vars[v]
-    D_constraint_lower = (0 <= Dv - (zv + 1 - xv + cv)/3.0)
-    D_constraint_upper = (     Dv - (zv + 1 - xv + cv)/3.0 <= 2.0/3.0)
+    D_constraint_lower = (0 <= Dv - (zv + 1 - xv + cv)/3.0, f"D{v}_lower")
+    D_constraint_upper = (     Dv - (zv + 1 - xv + cv)/3.0 <= 2.0/3.0, f"D{v}_upper")
     model += D_constraint_lower
     model += D_constraint_upper
 
@@ -88,8 +96,8 @@ for v in range(sel.n):
     dv = []
     for i in range(len(sel.family)):
         dv.append(div_vars[i][v])
-    cv_constraint_lower = (-1 + 1.0/F <= cv - (1.0/F)*lpSum(dv))
-    cv_constraint_upper = (              cv - (1.0/F)*lpSum(dv) <= 0)
+    cv_constraint_lower = (-1 + 1.0/F <= cv - (1.0/F)*lpSum(dv), f"c{v}_lower")
+    cv_constraint_upper = (              cv - (1.0/F)*lpSum(dv) <= 0, f"c{v}_upper")
     model += cv_constraint_lower
     model += cv_constraint_upper
 
@@ -97,23 +105,20 @@ for v in range(sel.n):
 for v in range(sel.n):
     for i in range(len(sel.family)):
         div = div_vars[i][v]
-        yiv = yiv_vars[i][v]
+        yiv = yiv_consts[i][v]
         Si = len(sel.family[i])
         x_i_not_v = []
         for var in sel.family[i]:
-            if var is not v:
+            if var != v:
                 x_i_not_v.append(x_vars[var])
-        div_constraint_lower = (0 <= div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)))
-        div_constraint_upper = (     div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)) <= 1 - (1.0/Si))
+        div_constraint_lower = (0 <= div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)), f"d,i{i},v{v},lower")
+        div_constraint_upper = (     div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)) <= 1 - (1.0/Si), f"d,i{i},v{v},upper")
+
         model += div_constraint_lower
         model += div_constraint_upper
 
-
-"""
-model += (2 * x + y <= 20, "red_constraint")
-
 # Objective function
-model += lpSum([])
+model += lpSum(z_vars)
 
 print(model)
 status = model.solve()
@@ -122,7 +127,12 @@ print(f"status: {model.status}, {LpStatus[model.status]}")
 
 print(f"objective: {model.objective.value()}")
 
+print("\nVariables:")
 for var in model.variables():
-    print(f"{var.name}: {var.value()}")
-"""
+    print(f"\t{var.name}: {var.value()}")
+
+print("\nConstraints:")
+for name, constraint in model.constraints.items():
+    print(f"\t{name}: {constraint.value()}")
+
 print("Success")
