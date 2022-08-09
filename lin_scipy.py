@@ -1,8 +1,5 @@
 from scipy.optimize import linprog
 
-class Selector:
-    pass
-
 obj = [-1, -2]
 
 lhs_ineq = [[ 2,  1],
