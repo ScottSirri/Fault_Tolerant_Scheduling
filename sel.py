@@ -1,4 +1,4 @@
-from pulp import LpMaximize, LpMinimize, LpProblem, LpStatus, lpSum, LpVariable, PULP_CBC_CMD, listSolvers, CPLEX_CMD
+from pulp import LpMaximize, LpMinimize, LpProblem, LpStatus, lpSum, LpVariable, PULP_CBC_CMD, listSolvers, value
 import math, random
 import sys
 
@@ -74,7 +74,7 @@ sel = Selector(n,k,r)
 c = 2   # Constant accompanying size of selector
 sel_size = c * k * math.floor(math.log(n)) # Size of selector
 
-p = 0.1 # Probability of each element being included (uniform distribution)
+p = 0.3 # Probability of each element being included (uniform distribution)
 
 for i in range(sel_size):
     sel_set = []
@@ -193,15 +193,19 @@ print(f"status: {model.status}, {LpStatus[model.status]}")
 print(f"objective: {model.objective.value()}")
 
 print("\nVariables:")
+selected = 0
 for var in model.variables():
     if var.name[0] == "x":
         print(f"\t{var.name}: {var.value()}")
+    if var.name[0] == "z":
+        selected += value(var)
 
-print()
+selected_str = str(selected)
+
 only = ""
-if status < r:
+if selected < r:
     only = "only "
-print("There exists a subset such that " + only + str(status) + " elements of it are selected.")
+print("There exists a subset such that " + only + selected_str + " elements of it are selected.")
 print()
 sel.print_sel()
 #print("\nConstraints:")
