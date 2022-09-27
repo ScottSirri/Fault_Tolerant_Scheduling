@@ -1,8 +1,15 @@
-from pulp import LpMaximize, LpMinimize, LpProblem, LpStatus, lpSum, LpVariable, PULP_CBC_CMD
+from pulp import LpMaximize, LpMinimize, LpProblem, LpStatus, lpSum, LpVariable, PULP_CBC_CMD, listSolvers, CPLEX_CMD
+import math, random
 import sys
 
 VALID = 0
 INVALID = -1
+
+# Default values
+n = 4
+k = 2
+r = 2
+
 
 class InputError(Exception):
     pass
@@ -33,17 +40,9 @@ class Selector:
             print(sel_set)
         print()
 
-sel = Selector(4, 2, 2)
+def usage():
+    print("Usage: sel.py [ilp/lp] [n] [k] [r]\n       sel.py [ilp/lp] [n]\t\t(assumes k=sqrt(n), r=k/2)\n")
 
-# Test input
-sel.family.append([1,2])
-sel.family.append([2])
-sel.family.append([1,3])
-sel.family.append([0,2])
-if sel.validate() != VALID:
-    print("======================== Invalid selector ========================")
-    raise InputError("Invalid selector")
-sel.print_sel()
 
 ilp_or_lp = ''
 if len(sys.argv) > 1:
@@ -52,9 +51,47 @@ if len(sys.argv) > 1:
     elif sys.argv[1] == "lp":
         ilp_or_lp = "Continuous"
     else:
+        usage()
         raise InputError("Must specify 'ilp' or 'lp'")
 else:
+    usage()
     raise InputError("Must specify 'ilp' or 'lp'")
+
+if len(sys.argv) == 5:
+    n = int(sys.argv[2])
+    k = int(sys.argv[3])
+    r = int(sys.argv[4])
+elif len(sys.argv) == 3:
+    n = int(sys.argv[2])
+    k = math.ceil(math.sqrt(n))
+    r = math.ceil(k / 2.0)
+else:
+    usage()
+    raise InputError()
+
+sel = Selector(n,k,r)
+
+c = 2   # Constant accompanying size of selector
+sel_size = c * k * math.floor(math.log(n)) # Size of selector
+
+p = 0.1 # Probability of each element being included (uniform distribution)
+
+for i in range(sel_size):
+    sel_set = []
+    while len(sel_set) == 0:
+        for j in range(n):
+            if random.random() < p:
+                sel_set.append(j)
+    sel.family.append(sel_set)
+
+# Test input
+#sel.family.append([1,2])
+#sel.family.append([2])
+#sel.family.append([1,3])
+#sel.family.append([0,2])
+if sel.validate() != VALID:
+    print("======================== Invalid selector ========================")
+    raise InputError("Invalid selector")
 
 z_vars = []
 x_vars = []
@@ -92,7 +129,7 @@ for i in range(len(sel.family)):
 # ==================== Constraint generation ====================
 
 # Constraint: \sum x_{v} = k
-x_constraint = (lpSum(x_vars) >= sel.k, "x_sum")
+x_constraint = (lpSum(x_vars) == sel.k, "x_sum")
 model += x_constraint
 
 # Constraint: D_{v} = 1
@@ -157,10 +194,18 @@ print(f"objective: {model.objective.value()}")
 
 print("\nVariables:")
 for var in model.variables():
-    print(f"\t{var.name}: {var.value()}")
+    if var.name[0] == "x":
+        print(f"\t{var.name}: {var.value()}")
 
-print("\nConstraints:")
-for name, constraint in model.constraints.items():
-    print(f"\t{name}: {constraint.value()}")
+print()
+only = ""
+if status < r:
+    only = "only "
+print("There exists a subset such that " + only + str(status) + " elements of it are selected.")
+print()
+sel.print_sel()
+#print("\nConstraints:")
+#for name, constraint in model.constraints.items():
+#    print(f"\t{name}: {constraint.value()}")
 
 print("Success")
