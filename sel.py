@@ -10,6 +10,9 @@ n = 4
 k = 2
 r = 2
 
+def intersection(lst1, lst2):
+    lst3 = [value for value in lst1 if value in lst2]
+    return lst3
 
 class InputError(Exception):
     pass
@@ -33,10 +36,16 @@ class Selector:
                     return INVALID
         return VALID
 
-    def print_sel(self):
+    def print_sel(self, selected_list):
+        if selected_list == None:
+            selected_list = []
         print(f"Candidate selector({self.n}, {self.k}, {self.r}):")
         for sel_set in self.family:
             print("\t", end='')
+            marker = "    " 
+            if len(intersection(sel_set, selected_list)) == 1:
+                   marker = "*** "
+            print(marker, end = '')
             print(sel_set)
         print()
 
@@ -74,7 +83,7 @@ sel = Selector(n,k,r)
 c = 2   # Constant accompanying size of selector
 sel_size = c * k * math.floor(math.log(n)) # Size of selector
 
-p = 0.3 # Probability of each element being included (uniform distribution)
+p = 4.0 / n # Probability of each element being included (uniform distribution)
 
 for i in range(sel_size):
     sel_set = []
@@ -115,8 +124,8 @@ model = LpProblem(name="small-problem", sense=LpMinimize)
 
 # ==================== LP Variable generation ====================
 for v in range(sel.n):
-    z_vars.append(LpVariable(name = f"z{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
-    x_vars.append(LpVariable(name = f"x{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
+    z_vars.append(LpVariable(name = f"z{v:03}", lowBound = 0, upBound=1, cat=ilp_or_lp))
+    x_vars.append(LpVariable(name = f"x{v:03}", lowBound = 0, upBound=1, cat=ilp_or_lp))
     D_vars.append(LpVariable(name = f"D{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
     c_vars.append(LpVariable(name = f"c{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
 
@@ -194,20 +203,23 @@ print(f"objective: {model.objective.value()}")
 
 print("\nVariables:")
 selected = 0
+selected_list = []
 for var in model.variables():
     if var.name[0] == "x":
-        print(f"\t{var.name}: {var.value()}")
+        marker = ""
+        if var.value() == 1:
+            marker = "***"
+            selected_list.append(int(var.name[1:]))
+        print(f"\t{var.name}: {var.value()} {marker}")
     if var.name[0] == "z":
         selected += value(var)
-
-selected_str = str(selected)
 
 only = ""
 if selected < r:
     only = "only "
-print("There exists a subset such that " + only + selected_str + " elements of it are selected.")
-print()
-sel.print_sel()
+print("There exists a subset such that " + only + str(selected) + " elements of it are selected.")
+print(selected_list)
+sel.print_sel(selected_list)
 #print("\nConstraints:")
 #for name, constraint in model.constraints.items():
 #    print(f"\t{name}: {constraint.value()}")
