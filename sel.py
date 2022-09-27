@@ -16,13 +16,13 @@ class Selector:
         self.r = in_r
 
     def validate(self):
-        if self.n <= 0 or self.k <= 0 or self.r <= 0 or k > n or r > k:
+        if self.n <= 0 or self.k <= 0 or self.r <= 0 or self.k > self.n or self.r > self.k:
             return INVALID
         for set in self.family:
             if type(set) is not list:
                 return INVALID
             for i in set:
-                if i < 0 or i >= self.n:
+                if i < 0 or i >= self.n:  # Elements are in [0,n)
                     return INVALID
         return VALID
 
@@ -45,6 +45,17 @@ if sel.validate() != VALID:
     raise InputError("Invalid selector")
 sel.print_sel()
 
+ilp_or_lp = ''
+if len(sys.argv) > 1:
+    if sys.argv[1] == "ilp":
+        ilp_or_lp = "Integer"
+    elif sys.argv[1] == "lp":
+        ilp_or_lp = "Continuous"
+    else:
+        raise InputError("Must specify 'ilp' or 'lp'")
+else:
+    raise InputError("Must specify 'ilp' or 'lp'")
+
 z_vars = []
 x_vars = []
 D_vars = []
@@ -62,31 +73,20 @@ for sel_set in sel.family:
             set_i_list.append(0)
     yiv_consts.append(set_i_list)
 
-# LP model
+# (I)LP model
 model = LpProblem(name="small-problem", sense=LpMinimize)
-
-category = ''
-if len(sys.argv) > 1:
-    if sys.argv[1] == "ilp":
-        category = "Integer"
-    elif sys.argv[1] == "lp":
-        category = "Continuous"
-    else:
-        raise InputError("Must specify 'ilp' or 'lp'")
-else:
-    raise InputError("Must specify 'ilp' or 'lp'")
 
 # ==================== LP Variable generation ====================
 for v in range(sel.n):
-    z_vars.append(LpVariable(name = f"z{v}", lowBound = 0, upBound=1, cat=category))
-    x_vars.append(LpVariable(name = f"x{v}", lowBound = 0, upBound=1, cat=category))
-    D_vars.append(LpVariable(name = f"D{v}", lowBound = 0, upBound=1, cat=category))
-    c_vars.append(LpVariable(name = f"c{v}", lowBound = 0, upBound=1, cat=category))
+    z_vars.append(LpVariable(name = f"z{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
+    x_vars.append(LpVariable(name = f"x{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
+    D_vars.append(LpVariable(name = f"D{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
+    c_vars.append(LpVariable(name = f"c{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
 
 for i in range(len(sel.family)):
     di = []
     for v in range(sel.n):
-        di.append(LpVariable(name = f"d{i},{v}", lowBound = 0, upBound=1, cat=category))
+        di.append(LpVariable(name = f"d{i},{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
     div_vars.append(di)
 
 # ==================== Constraint generation ====================
@@ -142,8 +142,8 @@ for v in range(sel.n):
 # Objective function
 model += lpSum(z_vars)
 
-print("======================== print(model) ========================")
-print(model)
+#print("======================== print(model) ========================")
+#print(model)
 
 print("======================== model.solve() ========================")
 status = model.solve()
