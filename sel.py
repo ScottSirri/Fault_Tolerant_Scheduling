@@ -10,7 +10,9 @@ n = 4
 k = 2
 r = 2
 
-p = 0.2  # Probability for each element to be included in a selector set
+# Probability for each element to be included in a particular 
+# selector set (uniform distribution)
+p = 0.2  
 
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
@@ -39,7 +41,8 @@ class Selector:
             self.family.append(sel_set)
 
     def validate(self):
-        if self.n <= 0 or self.k <= 0 or self.r <= 0 or self.k > self.n or self.r > self.k or self.p <= 0 or self.p > 1:
+        if (self.n <= 0 or self.k <= 0 or self.r <= 0 or self.k > self.n
+                or self.r > self.k or self.p <= 0 or self.p > 1):
             return INVALID
         for set in self.family:
             if type(set) is not list:
@@ -63,7 +66,8 @@ class Selector:
         print()
 
 def usage():
-    print("Usage: sel.py [ilp/lp] [n] [k] [r]\n       sel.py [ilp/lp] [n]\t\t(assumes k=sqrt(n), r=k/2)\n")
+    print("Usage: sel.py [ilp/lp] [n] [k] [r]\n"
+          "       sel.py [ilp/lp] [n]\t\t(assumes k=sqrt(n), r=k/2)\n")
 
 
 ilp_or_lp = ''
@@ -96,8 +100,8 @@ c = 10   # Constant accompanying size of selector
 sel_size = c * k * math.floor(math.log(n)) # Size of selector
 
 # Creating and populating the selector
-sel = Selector(n,k,r)
-sel.populate(sel_size, p)
+sel = Selector(n,k,r, p)
+sel.populate(sel_size)
 
 # Validate the selector
 if sel.validate() != VALID:
@@ -126,7 +130,7 @@ for sel_set in sel.family:
 # (I)LP model
 model = LpProblem(name="small-problem", sense=LpMinimize)
 
-# ==================== LP Variable generation ====================
+# ==================== Variable generation ====================
 for v in range(sel.n):
     z_vars.append(LpVariable(name = f"z{v:03}", lowBound = 0, upBound=1, cat=ilp_or_lp))
     x_vars.append(LpVariable(name = f"x{v:03}", lowBound = 0, upBound=1, cat=ilp_or_lp))
