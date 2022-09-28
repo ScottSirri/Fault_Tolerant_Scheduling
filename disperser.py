@@ -25,6 +25,10 @@ print("n = " + str(n))
 print("m = " + str(m))
 print("d = " + str(d))
 
+if d >= m/4:
+    print("\nd >= m/4 so this will trivially give you a disperser.")
+    quit()
+
 print("Forewarning: Number left-hand subsets is " + str(scipy.special.binom(n, math.ceil(m/2))) + " for EACH")
 print("Approximate average time per iteration is " + str(scipy.special.binom(n, math.ceil(m/2)) / 523000))
 

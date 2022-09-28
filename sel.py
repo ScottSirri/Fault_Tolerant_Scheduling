@@ -10,6 +10,8 @@ n = 4
 k = 2
 r = 2
 
+p = 0.2  # Probability for each element to be included in a selector set
+
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
     return lst3
@@ -20,13 +22,24 @@ class InputError(Exception):
 class Selector:
     family = []
 
-    def __init__(self, in_n, in_k, in_r):
+    def __init__(self, in_n, in_k, in_r, in_p):
         self.n = in_n
         self.k = in_k
         self.r = in_r
+        self.p = in_p
+
+    def populate(self, size):
+        self.family = []
+        for i in range(size):
+            sel_set = []
+            while len(sel_set) == 0:
+                for j in range(self.n):
+                    if random.random() < self.p:
+                        sel_set.append(j)
+            self.family.append(sel_set)
 
     def validate(self):
-        if self.n <= 0 or self.k <= 0 or self.r <= 0 or self.k > self.n or self.r > self.k:
+        if self.n <= 0 or self.k <= 0 or self.r <= 0 or self.k > self.n or self.r > self.k or self.p <= 0 or self.p > 1:
             return INVALID
         for set in self.family:
             if type(set) is not list:
@@ -78,29 +91,20 @@ else:
     usage()
     raise InputError()
 
-sel = Selector(n,k,r)
 
-c = 2   # Constant accompanying size of selector
+c = 10   # Constant accompanying size of selector
 sel_size = c * k * math.floor(math.log(n)) # Size of selector
 
-p = 4.0 / n # Probability of each element being included (uniform distribution)
+# Creating and populating the selector
+sel = Selector(n,k,r)
+sel.populate(sel_size, p)
 
-for i in range(sel_size):
-    sel_set = []
-    while len(sel_set) == 0:
-        for j in range(n):
-            if random.random() < p:
-                sel_set.append(j)
-    sel.family.append(sel_set)
-
-# Test input
-#sel.family.append([1,2])
-#sel.family.append([2])
-#sel.family.append([1,3])
-#sel.family.append([0,2])
+# Validate the selector
 if sel.validate() != VALID:
     print("======================== Invalid selector ========================")
     raise InputError("Invalid selector")
+
+# ============== Creating the (I)LP ==============
 
 z_vars = []
 x_vars = []
