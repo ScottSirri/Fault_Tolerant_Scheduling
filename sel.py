@@ -30,6 +30,16 @@ class Selector:
         self.r = in_r
         self.p = in_p
 
+    def populate_test(self, size):
+        self.family = []
+        for i in range(size):
+            sel_set = []
+            while len(sel_set) < math.ceil(n/3.0):
+                for j in range(self.n):
+                    if random.random() < 1.0/3:
+                        sel_set.append(j)
+            self.family.append(sel_set)
+
     def populate(self, size):
         self.family = []
         for i in range(size):
@@ -70,6 +80,8 @@ def usage():
           "       sel.py [ilp/lp] [n]\t\t(assumes k=sqrt(n), r=k/2)\n")
 
 
+# ===============  Command-line Input Processing ===================
+
 ilp_or_lp = ''
 if len(sys.argv) > 1:
     if sys.argv[1] == "ilp":
@@ -95,8 +107,9 @@ else:
     usage()
     raise InputError()
 
+# ============ Creating the selector ==============
 
-c = 10   # Constant accompanying size of selector
+c = 2   # Constant accompanying size of selector
 sel_size = c * k * math.floor(math.log(n)) # Size of selector
 
 # Creating and populating the selector
