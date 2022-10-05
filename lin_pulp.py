@@ -1,5 +1,7 @@
 from pulp import LpMaximize, LpMinimize, LpProblem, LpStatus, lpSum, LpVariable
 
+from ortools.sat.python import cp_model
+
 model = LpProblem(name="small-problem", sense=LpMaximize)
 
 x = LpVariable(name="x", lowBound=0, cat = "Integer")

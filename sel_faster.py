@@ -1,9 +1,11 @@
-from pulp import LpMaximize, LpMinimize, LpProblem, LpStatus, lpSum, LpVariable, PULP_CBC_CMD, listSolvers, value
+from ortools.sat.python import cp_model
 import math, random
 import sys
 
 VALID = 0
 INVALID = -1
+
+BINARY = 2
 
 # Arbitrary default values, later overwritten
 n = 4
@@ -79,6 +81,12 @@ class Selector:
             print(sel_set)
         print()
 
+    def print_sel_temp(self):
+        print(f"Candidate selector({self.n}, {self.k}, {self.r}):")
+        for sel_set in self.family:
+            print("\t", sel_set)
+        print()
+
 # Prints usage message for the program
 def usage():
     print("Usage: sel.py [ilp/lp] [n] [k] [r]\n"
@@ -143,45 +151,39 @@ for sel_set in sel.family:
     yiv_consts.append(set_i_list)
 
 # (I)LP model
-model = LpProblem(name="small-problem", sense=LpMinimize)
+model = cp_model.CpModel()
+
+# model.NewIntVar(0, num_vals - 1, 'x')
 
 # ==================== Variable generation ====================
 for v in range(sel.n):
-    z_vars.append(LpVariable(name = f"z{v:03}", 
-                             lowBound = 0, upBound=1, cat=ilp_or_lp))
-    x_vars.append(LpVariable(name = f"x{v:03}", 
-                             lowBound = 0, upBound=1, cat=ilp_or_lp))
-    D_vars.append(LpVariable(name = f"D{v}", 
-                             lowBound = 0, upBound=1, cat=ilp_or_lp))
-    c_vars.append(LpVariable(name = f"c{v}", 
-                             lowBound = 0, upBound=1, cat=ilp_or_lp))
+    z_vars.append(model.NewIntVar(0, BINARY, f"z{v:03}"))
+    x_vars.append(model.NewIntVar(0, BINARY, f"x{v:03}"))
+    D_vars.append(model.NewIntVar(0, BINARY, f"D{v}"))
+    c_vars.append(model.NewIntVar(0, BINARY, f"c{v}"))
 
 for i in range(len(sel.family)):
     di = []
     for v in range(sel.n):
-        di.append(LpVariable(name = f"d{i},{v}", 
-                             lowBound = 0, upBound=1, cat=ilp_or_lp))
+        di.append(model.NewIntVar(0, BINARY, f"d{i},{v}"))
     div_vars.append(di)
 
 # ==================== Constraint generation ====================
 
 # Constraint: \sum x_{v} = k
-x_constraint = (lpSum(x_vars) == sel.k, "x_sum")
-model += x_constraint
+model.Add(sum(x_vars) == sel.k)
 
 # Constraint: D_{v} = 1
 for v in range(sel.n):
-    Dv = D_vars[v]
-    D_constraint = (Dv == 1, f"D{v}")
-    model += D_constraint
+    model.Add(D_vars[v] == 1)
 
 # Constraint: 0 <= D_{v} - ... <= 2/3
 for v in range(sel.n):
     Dv, zv, xv, cv = D_vars[v], z_vars[v], x_vars[v], c_vars[v]
-    D_constraint_lower = (0 <= Dv - (1.0/3)*(zv + 1 - xv + cv), f"D{v}_lower")
-    D_constraint_upper = (     Dv - (1.0/3)*(zv + 1 - xv + cv) <= 2.0/3.0, f"D{v}_upper")
-    model += D_constraint_lower
-    model += D_constraint_upper
+    D_constraint_lower = (0 <= 3*Dv - (zv + 1 - xv + cv))
+    D_constraint_upper = (     3*Dv - (zv + 1 - xv + cv) <= 2)
+    model.Add(D_constraint_lower)
+    model.Add(D_constraint_upper)
 
 # Constraint: -1 + 1/F <= c_{v} - ... <= 0
 F = len(sel.family)
@@ -190,63 +192,58 @@ for v in range(sel.n):
     dv = []
     for i in range(len(sel.family)):
         dv.append(div_vars[i][v])
-    cv_constraint_lower = (-1 + (1.0/F) <= cv - (1.0/F)*lpSum(dv), f"c{v}_lower")
-    cv_constraint_upper = (                cv - (1.0/F)*lpSum(dv) <= 0, f"c{v}_upper")
-    model += cv_constraint_lower
-    model += cv_constraint_upper
+    cv_constraint_lower = (-1*F + 1 <= F * cv - sum(dv))
+    cv_constraint_upper = (            F * cv - sum(dv) <= 0)
+    model.Add(cv_constraint_lower)
+    model.Add(cv_constraint_upper)
 
 # Constraint: 0 <= d_{i,v} - ... <= 1 - 1/S_{i}
 for v in range(sel.n):
     for i in range(len(sel.family)):
         div = div_vars[i][v]
         yiv = yiv_consts[i][v]
-        Si = len(sel.family[i]) * 1.0
+        Si = len(sel.family[i])
         x_i_not_v = []
         for var in sel.family[i]:
             if var != v:
                 x_i_not_v.append(x_vars[var])
-        div_constraint_lower = (0 <= div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)), f"d,i{i},v{v},lower")
-        div_constraint_upper = (     div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)) <= 1 - (1.0/Si), 
-                f"d,i{i},v{v},upper")
+        div_constraint_lower = (0 <= Si * div - (1 - yiv + sum(x_i_not_v)))
+        div_constraint_upper = (     Si * div - (1 - yiv + sum(x_i_not_v)) <= Si - 1)
+        model.Add(div_constraint_lower)
+        model.Add(div_constraint_upper)
 
-        model += div_constraint_lower
-        model += div_constraint_upper
+# Objective function ******************************************************
+model.Add(sum(z_vars) < sel.r) # This way, the only feasible solutions are 
+                               # those disqualifying the candidate selector 
 
-# Objective function
-model += lpSum(z_vars)
+print(f"Testing for ({sel.n}, {sel.k}, {sel.r})-selector")
 
-#print("======================== print(model) ========================")
-#print(model)
+print("======================== solver.solve() ========================")
+solver = cp_model.CpSolver()
+status = solver.Solve(model)
 
-print("======================== model.solve() ========================")
-status = model.solve()
-#status = model.solve(PULP_CBC_CMD(msg=False))
+selected_x = []
 
-print("======================== Manually printing model info ========================")
+if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+    print("Found solution")
+    ctr = 0
+    for x in x_vars:
+        val = solver.Value(x)
+        if val == 1:
+            selected_x.append(ctr)
+            print(f'x{ctr:02} = {val} ***')
+        else:
+            print(f'x{ctr:02} = {val}')
+        ctr += 1
+else:
+    print('No solution found.')
 
-print(f"status: {model.status}, {LpStatus[model.status]}")
+sel.print_sel(selected_x)
 
-print(f"objective: {model.objective.value()}")
+num_sel = 0
+for z in z_vars:
+    num_sel += solver.Value(z)
 
-print("\nVariables:")
-selected = 0
-selected_list = []
-for var in model.variables():
-    if var.name[0] == "x":
-        marker = ""
-        if var.value() == 1:
-            marker = "***"
-            selected_list.append(int(var.name[1:]))
-        print(f"\t{var.name}: {var.value()} {marker}")
-    if var.name[0] == "z":
-        selected += value(var)
-
-only = ""
-if selected < r:
-    only = "only "
-print("There exists a subset such that " + only + str(selected) + 
-      " elements of it are selected.")
-print(selected_list)
-sel.print_sel(selected_list)
+print("Number of elements selected: " + str(num_sel))
 
 print("Success")
