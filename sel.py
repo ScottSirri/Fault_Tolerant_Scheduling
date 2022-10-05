@@ -10,6 +10,10 @@ n = 4
 k = 2
 r = 2
 
+# Parameters for ball-bin method
+c = 2
+d = 3
+
 # Probability for each element to be included in a particular 
 # selector set (uniform distribution)
 p = 0.2  
@@ -30,26 +34,24 @@ class Selector:
         self.r = in_r
         self.p = in_p
 
-    def populate_test(self, size):
-        self.family = []
-        for i in range(size):
-            sel_set = []
-            while len(sel_set) < math.ceil(n/3.0):
-                for j in range(self.n):
-                    if random.random() < 1.0/3:
-                        sel_set.append(j)
-            self.family.append(sel_set)
+    # Populates the sets of the selector
+    def populate(self):
+        num_collections = math.ceil(d * math.log(self.n))
+        collection_size = math.ceil(c * k)
+        sel_family_size = num_collections * collection_size
 
-    def populate(self, size):
         self.family = []
-        for i in range(size):
-            sel_set = []
-            while len(sel_set) == 0:
-                for j in range(self.n):
-                    if random.random() < self.p:
-                        sel_set.append(j)
-            self.family.append(sel_set)
+        for i in range(num_collections):
+            collection = [] # This is a list of lists, each of which is a selector set
+            for j in range(collection_size):
+                collection.append([])
+            for element in range(n):
+                index = math.floor(random.uniform(0, collection_size + 1))
+                collection[index].append(element)
+            for 
+            # self.family.append(.......)
 
+    # Validates that selector parameters are sensical
     def validate(self):
         if (self.n <= 0 or self.k <= 0 or self.r <= 0 or self.k > self.n
                 or self.r > self.k or self.p <= 0 or self.p > 1):
@@ -109,7 +111,7 @@ else:
 
 # ============ Creating the selector ==============
 
-c = 2   # Constant accompanying size of selector
+c = 4   # Constant accompanying size of selector
 sel_size = c * k * math.floor(math.log(n)) # Size of selector
 
 # Creating and populating the selector
