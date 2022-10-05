@@ -14,10 +14,6 @@ r = 2
 c = 2
 d = 3
 
-# Probability for each element to be included in a particular 
-# selector set (uniform distribution)
-p = 0.2  
-
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
     return lst3
@@ -28,16 +24,17 @@ class InputError(Exception):
 class Selector:
     family = []
 
-    def __init__(self, in_n, in_k, in_r, in_p):
+    def __init__(self, in_n, in_k, in_r, in_c, in_d):
         self.n = in_n
         self.k = in_k
         self.r = in_r
-        self.p = in_p
+        self.c = in_c
+        self.d = in_d
 
     # Populates the sets of the selector
     def populate(self):
-        num_collections = math.ceil(d * math.log(self.n))
-        collection_size = math.ceil(c * k)
+        num_collections = math.ceil(self.d * math.log(self.n))
+        collection_size = math.ceil(self.c * self.k)
         sel_family_size = num_collections * collection_size
 
         self.family = []
@@ -46,15 +43,16 @@ class Selector:
             for j in range(collection_size):
                 collection.append([])
             for element in range(n):
-                index = math.floor(random.uniform(0, collection_size + 1))
+                index = math.floor(random.uniform(0, collection_size))
                 collection[index].append(element)
-            for 
-            # self.family.append(.......)
+            for sel_set in collection:
+                if len(sel_set) > 0: # I'm guessing this is necessary? I see no reason to include empty selector sets
+                    self.family.append(sel_set)
 
     # Validates that selector parameters are sensical
     def validate(self):
         if (self.n <= 0 or self.k <= 0 or self.r <= 0 or self.k > self.n
-                or self.r > self.k or self.p <= 0 or self.p > 1):
+                or self.r > self.k or self.c <= 0 or self.d <= 0):
             return INVALID
         for set in self.family:
             if type(set) is not list:
@@ -111,12 +109,9 @@ else:
 
 # ============ Creating the selector ==============
 
-c = 4   # Constant accompanying size of selector
-sel_size = c * k * math.floor(math.log(n)) # Size of selector
-
 # Creating and populating the selector
-sel = Selector(n,k,r, p)
-sel.populate(sel_size)
+sel = Selector(n, k, r, c, d)
+sel.populate()
 
 # Validate the selector
 if sel.validate() != VALID:
