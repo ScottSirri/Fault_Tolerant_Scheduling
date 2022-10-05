@@ -5,7 +5,7 @@ import sys
 VALID = 0
 INVALID = -1
 
-# Default values
+# Arbitrary default values, later overwritten
 n = 4
 k = 2
 r = 2
@@ -39,14 +39,16 @@ class Selector:
 
         self.family = []
         for i in range(num_collections):
-            collection = [] # This is a list of lists, each of which is a selector set
+            collection = [] # List of lists, each of which is a selector set
             for j in range(collection_size):
                 collection.append([])
             for element in range(n):
                 index = math.floor(random.uniform(0, collection_size))
                 collection[index].append(element)
             for sel_set in collection:
-                if len(sel_set) > 0: # I'm guessing this is necessary? I see no reason to include empty selector sets
+                # I'm guessing this is necessary? I see no reason to include
+                # empty selector sets
+                if len(sel_set) > 0: 
                     self.family.append(sel_set)
 
     # Validates that selector parameters are sensical
@@ -142,15 +144,20 @@ model = LpProblem(name="small-problem", sense=LpMinimize)
 
 # ==================== Variable generation ====================
 for v in range(sel.n):
-    z_vars.append(LpVariable(name = f"z{v:03}", lowBound = 0, upBound=1, cat=ilp_or_lp))
-    x_vars.append(LpVariable(name = f"x{v:03}", lowBound = 0, upBound=1, cat=ilp_or_lp))
-    D_vars.append(LpVariable(name = f"D{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
-    c_vars.append(LpVariable(name = f"c{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
+    z_vars.append(LpVariable(name = f"z{v:03}", 
+                             lowBound = 0, upBound=1, cat=ilp_or_lp))
+    x_vars.append(LpVariable(name = f"x{v:03}", 
+                             lowBound = 0, upBound=1, cat=ilp_or_lp))
+    D_vars.append(LpVariable(name = f"D{v}", 
+                             lowBound = 0, upBound=1, cat=ilp_or_lp))
+    c_vars.append(LpVariable(name = f"c{v}", 
+                             lowBound = 0, upBound=1, cat=ilp_or_lp))
 
 for i in range(len(sel.family)):
     di = []
     for v in range(sel.n):
-        di.append(LpVariable(name = f"d{i},{v}", lowBound = 0, upBound=1, cat=ilp_or_lp))
+        di.append(LpVariable(name = f"d{i},{v}", 
+                             lowBound = 0, upBound=1, cat=ilp_or_lp))
     div_vars.append(di)
 
 # ==================== Constraint generation ====================
@@ -195,8 +202,7 @@ for v in range(sel.n):
         for var in sel.family[i]:
             if var != v:
                 x_i_not_v.append(x_vars[var])
-        div_constraint_lower = (0 <= div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)), 
-                f"d,i{i},v{v},lower")
+        div_constraint_lower = (0 <= div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)), f"d,i{i},v{v},lower")
         div_constraint_upper = (     div - (1.0/Si)*(1 - yiv + lpSum(x_i_not_v)) <= 1 - (1.0/Si), 
                 f"d,i{i},v{v},upper")
 
@@ -235,11 +241,9 @@ for var in model.variables():
 only = ""
 if selected < r:
     only = "only "
-print("There exists a subset such that " + only + str(selected) + " elements of it are selected.")
+print("There exists a subset such that " + only + str(selected) + 
+      " elements of it are selected.")
 print(selected_list)
 sel.print_sel(selected_list)
-#print("\nConstraints:")
-#for name, constraint in model.constraints.items():
-#    print(f"\t{name}: {constraint.value()}")
 
 print("Success")
