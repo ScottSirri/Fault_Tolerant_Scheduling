@@ -1,11 +1,11 @@
 from ortools.sat.python import cp_model
 import math, random
-import sys
+import sys, time
 
 VALID = 0
 INVALID = -1
 
-BINARY = 2
+BINARY = 1 # Inclusive upper bound on values of integer variables
 
 # Arbitrary default values, later overwritten
 n = 4
@@ -131,6 +131,8 @@ if sel.validate() != VALID:
     print("======================== Invalid selector ========================")
     raise InputError("Invalid selector")
 
+start_time = time.perf_counter()
+
 # ==================== Creating the (I)LP ====================
 
 z_vars = []
@@ -159,8 +161,8 @@ model = cp_model.CpModel()
 for v in range(sel.n):
     z_vars.append(model.NewIntVar(0, BINARY, f"z{v:03}"))
     x_vars.append(model.NewIntVar(0, BINARY, f"x{v:03}"))
-    D_vars.append(model.NewIntVar(0, BINARY, f"D{v}"))
-    c_vars.append(model.NewIntVar(0, BINARY, f"c{v}"))
+    D_vars.append(model.NewIntVar(0, BINARY, f"D{v:03}"))
+    c_vars.append(model.NewIntVar(0, BINARY, f"c{v:03}"))
 
 for i in range(len(sel.family)):
     di = []
@@ -180,13 +182,18 @@ for v in range(sel.n):
 # Constraint: 0 <= D_{v} - ... <= 2/3
 for v in range(sel.n):
     Dv, zv, xv, cv = D_vars[v], z_vars[v], x_vars[v], c_vars[v]
+    #print("--------- " + str(zv))
     D_constraint_lower = (0 <= 3*Dv - (zv + 1 - xv + cv))
     D_constraint_upper = (     3*Dv - (zv + 1 - xv + cv) <= 2)
+    #print("Constraint " + str(D_constraint_lower))
+    #print("Constraint " + str(D_constraint_upper))
     model.Add(D_constraint_lower)
     model.Add(D_constraint_upper)
 
 # Constraint: -1 + 1/F <= c_{v} - ... <= 0
 F = len(sel.family)
+print("c = " + str(c) + ", d = " + str(d))
+print("Selector size = " + str(F))
 for v in range(sel.n):
     Dv, cv = D_vars[v], c_vars[v]
     dv = []
@@ -222,9 +229,13 @@ print("======================== solver.solve() ========================")
 solver = cp_model.CpSolver()
 status = solver.Solve(model)
 
+end_time = time.perf_counter()
+
+
 selected_x = []
 
 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+    # This only executes if fewer than r elements are selected in some subset
     print("Found solution")
     ctr = 0
     for x in x_vars:
@@ -236,14 +247,42 @@ if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
             print(f'x{ctr:02} = {val}')
         ctr += 1
 else:
-    print('No solution found.')
+    sel.print_sel(selected_x)
+    print("No solution found, i.e., there's no subset of vars such that "
+          "fewer than " + str(r) + " are selected")
+    print("Time to solve: " + str(end_time - start_time) + " s")
+    print("Success")
+    quit()
 
 sel.print_sel(selected_x)
 
+print("Time to solve: " + str(end_time - start_time) + " s")
 num_sel = 0
 for z in z_vars:
+    print(str(z))
     num_sel += solver.Value(z)
+    if solver.Value(z) > 0:
+        print(str(z))
+
+for v in range(sel.n):
+    var = x_vars[v]
+    if solver.Value(var) != 1:
+        continue
+    print(str(var) + "  " + str(solver.Value(var)))
+    var = z_vars[v]
+    print(str(var) + "  " + str(solver.Value(var)))
+    var = D_vars[v]
+    print(str(var) + "  " + str(solver.Value(var)))
+    var = c_vars[v]
+    print(str(var) + "  " + str(solver.Value(var)))
+    for i in range(len(sel.family)):
+        var = div_vars[i][v]
+        print(str(var) + "  " + str(solver.Value(var)))
+        
+    print()
 
 print("Number of elements selected: " + str(num_sel))
+
+#print("Obj val: " + str(solver.ObjectiveValue()))
 
 print("Success")
