@@ -95,7 +95,6 @@ def usage():
 
 
 # ===============  Command-line Input Processing ===============
-
 ilp_or_lp = ''
 if len(sys.argv) > 1:
     if sys.argv[1] == "ilp":
