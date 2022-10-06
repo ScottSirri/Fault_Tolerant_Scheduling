@@ -16,6 +16,44 @@ def intersection(lst1, lst2):
 class InputError(Exception):
     pass
 
+class My_Timer:
+    def __init__(self):
+        self.start_time = -1
+        self.end_time = -1
+
+    def start_timer(self):
+        if self.start_time <= 0:
+            self.start_time = time.time()
+        else:
+            print("start_timer error")
+
+    def stop_timer(self):
+        if self.end_time <= 0 and self.start_time > 0:
+            self.end_time = time.time()
+        else:
+            print("stop_timer error")
+
+    def print_timer(self):
+        if self.start_time <= 0 or self.end_time <= self.start_time:
+            print("print_timer error")
+            return
+        elapsed = self.end_time - self.start_time
+        print("Time elapsed: %.3f" % elapsed)
+        self.start_time = -1
+        self.end_time = -1
+        return elapsed
+    
+    def get_time(self):
+        if self.start_time <= 0 or self.end_time <= self.start_time:
+            print("get_time error")
+            return
+        elapsed = self.end_time - self.start_time
+        self.start_time = -1
+        self.end_time = -1
+        return elapsed
+
+my_timer = My_Timer()
+
 class Selector:
     family = []
 
@@ -87,29 +125,6 @@ class ILP:
         self.yiv_consts = []
         self.selector = selector
         self.model = cp_model.CpModel()
-        self.start_time = -1
-        self.end_time = -1
-
-    def start_timer(self):
-        if self.start_time <= 0:
-            self.start_time = time.perf_counter()
-        else:
-            print("start_timer error")
-
-    def stop_timer(self):
-        if self.end_time <= 0 and self.start_time > 0:
-            self.end_time = time.perf_counter()
-        else:
-            print("stop_timer error")
-
-    def print_timer(self):
-        if self.start_time <= 0 or self.end_time <= self.start_time:
-            print("print_timer error")
-            return
-        print("Time elapsed: " + str(self.end_time - self.start_time))
-        return self.end_time - self.start_time
-        self.start_time = -1
-        self.end_time = -1
 
     # Initialize the y_{i,v} constants defining the selector (problem instance)
     def init_instance(self):
@@ -196,12 +211,9 @@ class ILP:
 
     # Runs the ILP once its been totally configured
     def run_ilp(self):
-        print(f"Testing for ({sel.n}, {sel.k}, {sel.r})-selector")
-        self.start_timer()
+        print(f"Test for ({sel.n}, {sel.k}, {sel.r})-selector... ", end = '')
         self.solver = cp_model.CpSolver()
         self.status = self.solver.Solve(self.model)
-        self.stop_timer()
-        return self.print_timer()
     
     # Displays the results of the ILP once its been run
     def display_results(self):
@@ -256,6 +268,9 @@ class ILP:
         print("Number of elements selected: " + str(num_sel))
 
     def ilp_iter(self):
+        local_timer = My_Timer()
+        local_timer.start_timer()
+
         # Initialization, variables
         self.init_instance()
         self.init_vars()
@@ -266,32 +281,43 @@ class ILP:
         self.constraint_cv()
         self.constraint_div()
         self.constraint_r_selected()
+        local_timer.stop_timer()
+        gen_time = local_timer.get_time()
+
         # Run
-        run_time = self.run_ilp()
+        local_timer.start_timer()
+        self.run_ilp()
+        local_timer.stop_timer()
+        run_time = local_timer.get_time()
+
+        print("Time to generate vs run ILP: %.3f vs %.3f" % (gen_time, run_time))
         results = self.display_results()
         if results == INVALID:
             self.dump_vars()
         #else:   # Delete this else-statement later, it's for testing purposes
         #    self.selector.print_sel()
-        return run_time
 
 
 c, d = 2, 3
 
-for k_ind in range(5, 8):
+for k_ind in range(5, 11):
     n, k, r = k_ind**2, k_ind, math.ceil(k_ind/2)
     print("=== ({n}, {k}, {r}) ===")
     avg_time = 0
     iters = 5
     for i in range(iters):
         sel = Selector(n, k, r, c, d)
+        my_timer.start_timer()
         sel.populate()
         sel.validate()
         ilp = ILP(sel)
-        run_time = ilp.ilp_iter()
-        avg_time += run_time
+        ilp.ilp_iter()
+        my_timer.stop_timer()
+        gen_run_time = my_timer.get_time()
+        avg_time += gen_run_time
+        print("Gen + run time: %.3f" % gen_run_time)
     avg_time /= iters
-    print(f"Average time: {avg_time}")
+    print(f"\tAverage time: {avg_time:2}")
     print()
 
 print("Success")
