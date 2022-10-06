@@ -1,4 +1,5 @@
 from ortools.sat.python import cp_model
+#https://developers.google.com/optimization/cp/cp_solver 
 import math, random
 import sys, time
 
@@ -66,7 +67,7 @@ class Selector:
                     return INVALID
         return VALID
 
-    # Prints the selector with stars denoting the "bottleneck" sets in which 
+    # Prints the selector with stars denoting the "bottleneck" sets in which
     # the minimal set of selected elements are selected
     def print_sel(self, selected_list):
         if selected_list == None:
