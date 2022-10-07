@@ -6,7 +6,7 @@ import sys, time
 VALID = 0
 INVALID = -1
 
-BINARY = 1 # Inclusive upper bound on values of integer variables
+BINARY = 1 # Inclusive upper bound on values of ILP integer variables
 
 # Helper function for output purposes
 def intersection(lst1, lst2):
@@ -16,23 +16,27 @@ def intersection(lst1, lst2):
 class InputError(Exception):
     pass
 
+# Utility class for timing code execution
 class My_Timer:
     def __init__(self):
         self.start_time = -1
         self.end_time = -1
 
+    # Start the timer
     def start_timer(self):
         if self.start_time <= 0:
             self.start_time = time.time()
         else:
             print("start_timer error")
 
+    # Stop the timer
     def stop_timer(self):
         if self.end_time <= 0 and self.start_time > 0:
             self.end_time = time.time()
         else:
             print("stop_timer error")
 
+    # Print the timer duration and reset it
     def print_timer(self):
         if self.start_time <= 0 or self.end_time <= self.start_time:
             print("print_timer error")
@@ -43,6 +47,7 @@ class My_Timer:
         self.end_time = -1
         return elapsed
     
+    # Get the timer duration and reset it
     def get_time(self):
         if self.start_time <= 0 or self.end_time <= self.start_time:
             print("get_time error")
@@ -52,12 +57,9 @@ class My_Timer:
         self.end_time = -1
         return elapsed
 
-my_timer = My_Timer()
-
 class Selector:
-    family = []
-
     def __init__(self, in_n, in_k, in_r, in_c, in_d):
+        self.family = []
         self.n = in_n
         self.k = in_k
         self.r = in_r
@@ -81,6 +83,26 @@ class Selector:
             for sel_set in collection:
                 # I'm guessing this is necessary? I see no reason to include
                 # empty selector sets
+                if len(sel_set) > 0: 
+                    self.family.append(sel_set)
+
+    # For the purposes of sanity check on verifying ILP correctness... except
+    # it doesn't produce a selector that's disqualified by my ILP as often as
+    # I think it should...
+    def populate_incorrectly(self, c, d):
+        num_collections = math.ceil(self.d * math.log(self.n))
+        collection_size = math.ceil(self.c * self.k)
+        sel_family_size = num_collections * collection_size
+        # Achieve the same approximate proportion of element membership
+        p = num_collections/sel_family_size
+
+        self.family = []
+        for i in range(sel_family_size):
+            sel_set = [] # List of lists, each of which is a selector set
+            while len(sel_set) <= 0:
+                for j in range(n):
+                    if random.random() < p:
+                        sel_set.append(j)
                 if len(sel_set) > 0: 
                     self.family.append(sel_set)
 
@@ -211,7 +233,7 @@ class ILP:
 
     # Runs the ILP once its been totally configured
     def run_ilp(self):
-        print(f"Test for ({sel.n}, {sel.k}, {sel.r})-selector... ", end = '')
+        print(f"Testing... ", end = '')
         self.solver = cp_model.CpSolver()
         self.status = self.solver.Solve(self.model)
     
@@ -223,7 +245,7 @@ class ILP:
                   f"{self.selector.k}, {self.selector.r})-SELECTOR ======")
             selected_x = []
             ctr = 0
-            for x in x_vars:
+            for x in self.x_vars:
                 val = self.solver.Value(x)
                 if val == 1:
                     selected_x.append(ctr)
@@ -255,11 +277,11 @@ class ILP:
             if self.solver.Value(var) != 1:
                 continue
             print(str(var) + "  " + str(self.solver.Value(var)))
-            var = z_vars[v]
+            var = self.z_vars[v]
             print(str(var) + "  " + str(self.solver.Value(var)))
-            var = D_vars[v]
+            var = self.D_vars[v]
             print(str(var) + "  " + str(self.solver.Value(var)))
-            var = c_vars[v]
+            var = self.c_vars[v]
             print(str(var) + "  " + str(self.solver.Value(var)))
             for i in range(len(self.selector.family)):
                 var = self.div_vars[i][v]
@@ -267,6 +289,8 @@ class ILP:
             print()
         print("Number of elements selected: " + str(num_sel))
 
+    # Perform an iteration of the ILP, including instantiation, initialization,
+    # running, and reporting of results
     def ilp_iter(self):
         local_timer = My_Timer()
         local_timer.start_timer()
@@ -284,40 +308,54 @@ class ILP:
         local_timer.stop_timer()
         gen_time = local_timer.get_time()
 
+        print(self.model.ModelStats())
+
         # Run
         local_timer.start_timer()
         self.run_ilp()
         local_timer.stop_timer()
         run_time = local_timer.get_time()
 
-        print("Time to generate vs run ILP: %.3f vs %.3f" % (gen_time, run_time))
+        print("Time to generate vs run ILP: %.3f vs %.3f" % 
+              (gen_time, run_time))
         results = self.display_results()
         if results == INVALID:
             self.dump_vars()
+            print("Awaiting user input, press enter when ready...")
+            input()
         #else:   # Delete this else-statement later, it's for testing purposes
         #    self.selector.print_sel()
+        return [gen_time, run_time]
 
+
+# The main code that's run
 
 c, d = 2, 3
+lower, upper, step = 40, 100, 10
 
-for k_ind in range(5, 11):
-    n, k, r = k_ind**2, k_ind, math.ceil(k_ind/2)
-    print("=== ({n}, {k}, {r}) ===")
-    avg_time = 0
-    iters = 5
+for n_ind in range(lower, upper + step, step):
+    n = n_ind
+    k = math.ceil(math.sqrt(n))
+    r = math.ceil(k/2)
+
+    print(f"=== ({n}, {k}, {r}) ===")
+    avg_gen_time, avg_run_time = 0, 0
+    iters = 10
     for i in range(iters):
+        print(str(i+1) + "). ", end = '')
         sel = Selector(n, k, r, c, d)
-        my_timer.start_timer()
+        #sel.populate_incorrectly(c, d)
         sel.populate()
         sel.validate()
         ilp = ILP(sel)
-        ilp.ilp_iter()
-        my_timer.stop_timer()
-        gen_run_time = my_timer.get_time()
-        avg_time += gen_run_time
-        print("Gen + run time: %.3f" % gen_run_time)
-    avg_time /= iters
-    print(f"\tAverage time: {avg_time:2}")
+        #sel.print_sel()
+        times = ilp.ilp_iter()
+        avg_gen_time += times[0]
+        avg_run_time += times[1]
+    avg_gen_time /= iters
+    avg_run_time /= iters
+    print("\tAverage time: %.3f (%.3f vs %.3f)" % 
+          ((avg_gen_time + avg_run_time), avg_gen_time, avg_run_time))
     print()
 
 print("Success")
