@@ -1,7 +1,9 @@
 from ortools.sat.python import cp_model
 #https://developers.google.com/optimization/cp/cp_solver 
 import math, random
+from math import log
 import sys, time
+import itertools, re
 
 VALID = 0
 INVALID = -1
@@ -12,6 +14,31 @@ BINARY = 1 # Inclusive upper bound on values of ILP integer variables
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
     return lst3
+
+# Helper function for parsing string, extracting integers
+def extract_vars_constraints(string):
+    ints = re.findall(r'\d+', string)
+    return [int(ints[0]), int(ints[5])+int(ints[7])+int(ints[9])+int(ints[10])]
+
+def is_prime(num):
+    if num < 2:
+        return False
+    for i in range(2, int(math.sqrt(num)) + 1):
+        if num % i == 0:
+            return False
+    return True
+
+# Generate the first num_primes prime numbers >= lower
+def generate_primes(lower, num_primes):
+    primes = []
+    i = lower
+    if i % 2 == 0:
+        i += 1
+    while len(primes) < num_primes:
+        if is_prime(i):
+            primes.append(i)
+        i += 2
+    return primes
 
 class InputError(Exception):
     pass
@@ -68,7 +95,7 @@ class Selector:
 
     # Populates the sets of the selector
     def populate(self):
-        num_collections = math.ceil(self.d * math.log(self.n))
+        num_collections = math.ceil(self.d * log(self.n))
         collection_size = math.ceil(self.c * self.k)
         sel_family_size = num_collections * collection_size
 
@@ -89,8 +116,8 @@ class Selector:
     # For the purposes of sanity check on verifying ILP correctness... except
     # it doesn't produce a selector that's disqualified by my ILP as often as
     # I think it should...
-    def populate_incorrectly(self, c, d):
-        num_collections = math.ceil(self.d * math.log(self.n))
+    def populate_incorrectly(self):
+        num_collections = math.ceil(self.d * log(self.n))
         collection_size = math.ceil(self.c * self.k)
         sel_family_size = num_collections * collection_size
         # Achieve the same approximate proportion of element membership
@@ -105,6 +132,18 @@ class Selector:
                         sel_set.append(j)
                 if len(sel_set) > 0: 
                     self.family.append(sel_set)
+    
+    # Returns the number of sets that would be in a selector of these
+    # parameters produced by the modulo mapping method in Dr. Agrawal's paper.
+    def modulo_num_slots(self):
+        n = self.n
+        k = self.k
+        num_collections = k * math.ceil(log(n) / log(k * log(n)))
+        primes = generate_primes(num_collections, math.floor(k * log(n)) + 1)
+        num_slots = 0
+        for prime in primes:
+            num_slots += prime
+        return num_slots
 
     # Validates that selector parameters and values are sensical
     def validate(self):
@@ -256,7 +295,7 @@ class ILP:
             self.selector.print_sel(selected_x)
             return INVALID
         else:
-            print(f"Confirmed ({self.selector.n}, {self.selector.k}, "
+            print(f"    Confirmed ({self.selector.n}, {self.selector.k}, "
                   f"{self.selector.r})-selector")
             return VALID
 
@@ -308,15 +347,21 @@ class ILP:
         local_timer.stop_timer()
         gen_time = local_timer.get_time()
 
-        print(self.model.ModelStats())
+        #print(self.model.ModelStats())
+        stats = self.model.ModelStats()
+        nums_tuple = extract_vars_constraints(stats)
+        num_vars = nums_tuple[0]
+        num_constraints = nums_tuple[1]
 
         # Run
         local_timer.start_timer()
         self.run_ilp()
         local_timer.stop_timer()
         run_time = local_timer.get_time()
-
-        print("Time to generate vs run ILP: %.3f vs %.3f" % 
+        
+        print("Selector size: %03d, # ILP vars: %05d, # ILP constraints: %05d"
+              % (len(self.selector.family), num_vars, num_constraints))
+        print("    Time to generate vs run ILP: %.3f vs %.3f\t" % 
               (gen_time, run_time))
         results = self.display_results()
         if results == INVALID:
@@ -327,35 +372,71 @@ class ILP:
         #    self.selector.print_sel()
         return [gen_time, run_time]
 
+# Perform the naive verification, exhaustively checking {n \choose k} subsets
+def naive_verify(selector):
+    my_timer = My_Timer()
+    my_timer.start_timer()
+    subsets = itertools.combinations(range(selector.n), selector.k)
+    for subset in subsets:
+        selected = []
+        for sel_set in selector.family:
+            inter_set = intersection(subset, sel_set)
+            if len(inter_set) == 1:
+                if inter_set[0] not in selected:
+                    selected.append(inter_set[0])
+        if len(selected) < selector.r:
+            print("=== DISQUALIFIED (%d, %d, %d)-SELECTOR ===" % 
+                  (selector.n, selector.k, selector.r))
+            my_timer.stop_timer()
+            return [INVALID, my_timer.get_time()]
+    print("    Confirmed (%d, %d, %d)-selector" % 
+          (selector.n, selector.k, selector.r))
+    my_timer.stop_timer()
+    return [VALID, my_timer.get_time()]
 
 # The main code that's run
 
 c, d = 2, 3
-lower, upper, step = 40, 100, 10
+NAIVE = False
+if NAIVE:
+    lower, upper, step = 21, 100, 2
+else:
+    lower, upper, step = 105, 200, 10
+    
 
 for n_ind in range(lower, upper + step, step):
     n = n_ind
     k = math.ceil(math.sqrt(n))
     r = math.ceil(k/2)
+    sel = Selector(n, k, r, c, d)
 
     print(f"=== ({n}, {k}, {r}) ===")
+    #print("MODULO size: %d" % sel.modulo_num_slots())
     avg_gen_time, avg_run_time = 0, 0
-    iters = 10
+    iters = 4
     for i in range(iters):
-        print(str(i+1) + "). ", end = '')
+        print("%02d)." % (i+1), end = '')
         sel = Selector(n, k, r, c, d)
         #sel.populate_incorrectly(c, d)
         sel.populate()
         sel.validate()
-        ilp = ILP(sel)
-        #sel.print_sel()
-        times = ilp.ilp_iter()
-        avg_gen_time += times[0]
-        avg_run_time += times[1]
-    avg_gen_time /= iters
+        if not NAIVE:
+            #sel.print_sel()
+            ilp = ILP(sel)
+            times = ilp.ilp_iter()
+            avg_gen_time += times[0]
+            avg_run_time += times[1]
+        else:
+            output = naive_verify(sel)
+            print("Time elapsed: %.3f" % output[1])
+            avg_run_time += output[1]
     avg_run_time /= iters
-    print("\tAverage time: %.3f (%.3f vs %.3f)" % 
-          ((avg_gen_time + avg_run_time), avg_gen_time, avg_run_time))
+    if not NAIVE:
+        avg_gen_time /= iters
+        print("\tAverage time: %.3f (%.3f vs %.3f)" % 
+              ((avg_gen_time + avg_run_time), avg_gen_time, avg_run_time))
+    else:
+        print("\tAverage time: %.3f" % avg_run_time)
     print()
 
 print("Success")
