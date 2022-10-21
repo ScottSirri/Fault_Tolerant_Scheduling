@@ -84,30 +84,17 @@ class Selector:
 
 # Prints usage message for the program
 def usage():
-    print("Usage: sel_pysat.py [ilp/lp] [n] [k] [r]\n"
-          "       sel_pysat.py [ilp/lp] [n]\t\t(assumes k=sqrt(n), r=k/2)\n")
+    print("Usage: sel_pysat.py [n] [k] [r]\n"
+          "       sel_pysat.py [n]\t\t(assumes k=sqrt(n), r=k/2)\n")
 
 
 # ===============  Command-line Input Processing ===============
-ilp_or_lp = ''
-if len(sys.argv) > 1:
-    if sys.argv[1] == "ilp":
-        ilp_or_lp = "Integer"
-    elif sys.argv[1] == "lp":
-        ilp_or_lp = "Continuous"
-    else:
-        usage()
-        raise InputError("Must specify 'ilp' or 'lp'")
-else:
-    usage()
-    raise InputError("Must specify 'ilp' or 'lp'")
-
-if len(sys.argv) == 5:
-    n = int(sys.argv[2])
-    k = int(sys.argv[3])
-    r = int(sys.argv[4])
-elif len(sys.argv) == 3:
-    n = int(sys.argv[2])
+if len(sys.argv) == 4:
+    n = int(sys.argv[1])
+    k = int(sys.argv[2])
+    r = int(sys.argv[3])
+elif len(sys.argv) == 2:
+    n = int(sys.argv[1])
     k = math.ceil(math.sqrt(n))
     r = math.ceil(k / 2.0)
 else:
@@ -154,8 +141,8 @@ def get_var_name(var_num):
     elif n+1 <= var_num and var_num <= 2*n:
         return ["x", var_num - n]
     elif 2*n+1 <= var_num:
-        i = (var_num - 2n) / n + 1
-        v = (var_num - 2n) % n
+        i = (var_num - 2*n) / n + 1
+        v = (var_num - 2*n) % n
         return ["y", i, v]
     else:
         return "INVALID"
@@ -163,15 +150,15 @@ def get_var_name(var_num):
 
 # Had to do a little distributing to get this into CNF
 
-g = Glucose3() # Arbitrary choice, choose a more suitable solver later
-for v in range(n):
+g = Glucose3(use_timer = True) # Arbitrary, choose a more suitable solver later
+for v in range(1,n+1):
     zv,xv = get_var_num(["z",v]), get_var_num(["x",v])
-    for i in range(len(sel.family)):
+    for i in range(1,len(sel.family)+1):
         yiv = get_var_num(["y",i,v])
         v_in_Si = False
 
         clause_v_i = [zv, NOT * xv, NOT * yiv]
-        for x_num_raw in sel.family[i]:
+        for x_num_raw in sel.family[i-1]:
             if x_num_raw != v:
                 x_not_v = get_var_num(["x", x_num_raw])
                 clause_v_i.append(x_not_v)
@@ -180,33 +167,44 @@ for v in range(n):
                 # necessary to set yiv=1 constant for each v in each Si
                 v_in_Si = True
         if v_in_Si:
-            g.add_clause(yiv)
+            g.add_clause([yiv])
         else:
-            g.add_clause(NOT * yiv)
-
+            g.add_clause([NOT * yiv])
+        #print(f"clause_{v}_{i}:", end=" ")
+        #print(clause_v_i)
         g.add_clause(clause_v_i)
 
 
 # \sum x_{v} >= k
-xv_k = CardEnd.atleast(lits=list(range(n+1, 2*n+1)), bound=k, encoding=EncType.seqcounter)
-g.add_formula(xv_k)
+xv_k = CardEnc.atleast(lits=list(range(n+1, 2*n+1)), 
+                       bound=k, encoding=EncType.seqcounter)
+for clause in xv_k:
+    g.add_clause(clause)
 
 # \sum z_{v} < r
-zv_r = CardEnd.atmost(lits=list(range(1, n+1)), bound=r-1, encoding=EncType.seqcounter)
-g.add_formula(zv_r)
-
-"""
-print("Clauses:")
-print(cnf.clauses)
-for clause in cnf:
+zv_r = CardEnc.atmost(lits=list(range(1, n+1)), 
+                      bound=r-1, encoding=EncType.seqcounter)
+for clause in zv_r:
     g.add_clause(clause)
-"""
 
-print("Solve:")
+#print("Clauses:")
+#print(g.clauses)
+
+print("   # vars: " + str(g.nof_vars()))
+print("# clauses: " + str(g.nof_clauses()))
+
+print("Solve: ", end='')
 #start_time = time.perf_counter()
-print(g.solve())
+sat = g.solve()
+print(sat)
 
-print("Model:")
-print(g.get_model())
+print("Time spent: " + str(g.time()))
+
+if not sat:
+    print("Core:", end='')
+    print(g.get_core())
+else:
+    print("Model:")
+    print(g.get_model())
 
 print("Success")
