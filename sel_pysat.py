@@ -47,10 +47,8 @@ class Selector:
                 collection.append([])
             for element in range(n):
                 index = math.floor(random.uniform(0, collection_size))
-                collection[index].append(element)
+                collection[index].append(element+1)
             for sel_set in collection:
-                # I'm guessing this is necessary? I see no reason to include
-                # empty selector sets
                 if len(sel_set) > 0: 
                     self.family.append(sel_set)
 
@@ -65,7 +63,7 @@ class Selector:
             sel_set = [] # List of lists, each of which is a selector set
             for element in range(n):
                 if random.random() < .1:
-                    sel_set.append(element)
+                    sel_set.append(element+1)
             if len(sel_set) > 0: 
                 self.family.append(sel_set)
 
@@ -78,7 +76,7 @@ class Selector:
             if type(set) is not list:
                 return INVALID
             for i in set:
-                if i < 0 or i >= self.n:  # Elements are in [0,n)
+                if i < 1 or i > self.n:  # Elements are in [1,n]
                     return INVALID
         return VALID
 
@@ -216,7 +214,6 @@ print("   # vars: " + str(g.nof_vars()))
 print("# clauses: " + str(g.nof_clauses()))
 
 print("   Satisfiable: ", end='')
-#start_time = time.perf_counter()
 sat = g.solve()
 print(sat)
 
