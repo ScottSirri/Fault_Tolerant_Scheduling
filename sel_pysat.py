@@ -151,22 +151,17 @@ def get_var_num(var_data):
 def get_var_name(var_num):
     if 1 <= var_num and var_num <= n:
         return ["z", var_num]
-    elif n+1 <= var_num and var_num <= 2n:
+    elif n+1 <= var_num and var_num <= 2*n:
         return ["x", var_num - n]
-    elif 2n+1 <= var_num:
+    elif 2*n+1 <= var_num:
         i = (var_num - 2n) / n + 1
         v = (var_num - 2n) % n
         return ["y", i, v]
     else:
         return "INVALID"
 
-"""
-g.add_clause([-1, 2])
-g.add_clause([-2, 3])
-print(g.solve())
-print(g.get_model())
-print("Success")
-"""
+
+# Had to do a little distributing to get this into CNF
 
 g = Glucose3() # Arbitrary choice, choose a more suitable solver later
 for v in range(n):
@@ -175,11 +170,11 @@ for v in range(n):
         yiv = get_var_num(["y",i,v])
         v_in_Si = False
 
-        clause = [zv, NOT * xv, NOT * yiv]
+        clause_v_i = [zv, NOT * xv, NOT * yiv]
         for x_num_raw in sel.family[i]:
             if x_num_raw != v:
-                x_not_v_num = get_var_num(["x", x_num_raw])
-                clause.append(x_not_v_num)
+                x_not_v = get_var_num(["x", x_num_raw])
+                clause_v_i.append(x_not_v)
             else:
                 # Not strictly in the original formula, but this makes it 
                 # necessary to set yiv=1 constant for each v in each Si
@@ -189,29 +184,26 @@ for v in range(n):
         else:
             g.add_clause(NOT * yiv)
 
+        g.add_clause(clause_v_i)
 
 
+# \sum x_{v} >= k
+xv_k = CardEnd.atleast(lits=list(range(n+1, 2*n+1)), bound=k, encoding=EncType.seqcounter)
+g.add_formula(xv_k)
 
+# \sum z_{v} < r
+zv_r = CardEnd.atmost(lits=list(range(1, n+1)), bound=r-1, encoding=EncType.seqcounter)
+g.add_formula(zv_r)
 
-
-
-
-
-
-
-
-
-l, u = 4, 8
-
-cnf = CardEnc.atmost(lits=list(range(1,5)), bound=2, encoding=EncType.seqcounter)
-
+"""
 print("Clauses:")
 print(cnf.clauses)
 for clause in cnf:
     g.add_clause(clause)
+"""
 
 print("Solve:")
-start_time = time.perf_counter()
+#start_time = time.perf_counter()
 print(g.solve())
 
 print("Model:")
