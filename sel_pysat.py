@@ -54,6 +54,21 @@ class Selector:
                 if len(sel_set) > 0: 
                     self.family.append(sel_set)
 
+    def bad_populate(self):
+        num_collections = math.ceil(self.d * math.log(self.n))
+        collection_size = math.ceil(self.c * self.k)
+        sel_family_size = num_collections * collection_size
+        print(" ====== BEWARE! BAD SELECTOR POPULATION! ======")
+
+        self.family = []
+        for i in range(self.k):
+            sel_set = [] # List of lists, each of which is a selector set
+            for element in range(n):
+                if random.random() < .1:
+                    sel_set.append(element)
+            if len(sel_set) > 0: 
+                self.family.append(sel_set)
+
     # Validates that selector parameters are sensical
     def validate(self):
         if (self.n <= 0 or self.k <= 0 or self.r <= 0 or self.k > self.n
@@ -69,7 +84,7 @@ class Selector:
 
     # Prints the selector with stars denoting the "bottleneck" sets in which
     # the minimal set of selected elements are selected
-    def print_sel(self, selected_list):
+    def print_sel(self, selected_list=None):
         if selected_list == None:
             selected_list = []
         print(f"Candidate selector({self.n}, {self.k}, {self.r}):")
@@ -105,7 +120,8 @@ else:
 
 # Creating and populating the selector
 sel = Selector(n, k, r, c, d)
-sel.populate()
+sel.bad_populate()
+sel.print_sel()
 
 # Validate the selector
 if sel.validate() != VALID:
@@ -147,6 +163,7 @@ def get_var_name(var_num):
     else:
         return "INVALID"
 
+formula = []
 
 # Had to do a little distributing to get this into CNF
 
@@ -168,11 +185,14 @@ for v in range(1,n+1):
                 v_in_Si = True
         if v_in_Si:
             g.add_clause([yiv])
+            formula.append([yiv])
         else:
             g.add_clause([NOT * yiv])
+            formula.append([NOT * yiv])
         #print(f"clause_{v}_{i}:", end=" ")
         #print(clause_v_i)
         g.add_clause(clause_v_i)
+        formula.append(clause_v_i)
 
 
 # \sum x_{v} >= k
@@ -180,31 +200,35 @@ xv_k = CardEnc.atleast(lits=list(range(n+1, 2*n+1)),
                        bound=k, encoding=EncType.seqcounter)
 for clause in xv_k:
     g.add_clause(clause)
+    formula.append(clause)
 
 # \sum z_{v} < r
 zv_r = CardEnc.atmost(lits=list(range(1, n+1)), 
                       bound=r-1, encoding=EncType.seqcounter)
 for clause in zv_r:
     g.add_clause(clause)
+    formula.append(clause)
 
-#print("Clauses:")
-#print(g.clauses)
+print("Clauses: ", end='')
+print(formula)
 
 print("   # vars: " + str(g.nof_vars()))
 print("# clauses: " + str(g.nof_clauses()))
 
-print("Solve: ", end='')
+print("   Satisfiable: ", end='')
 #start_time = time.perf_counter()
 sat = g.solve()
 print(sat)
 
-print("Time spent: " + str(g.time()))
+print("Valid selector: " + str(not sat))
+
+print("    Time spent: " + str(g.time()))
 
 if not sat:
-    print("Core:", end='')
+    print("Core: ", end='')
     print(g.get_core())
 else:
     print("Model:")
     print(g.get_model())
 
-print("Success")
+print("Successfully terminated")
