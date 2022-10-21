@@ -220,10 +220,10 @@ for v in range(1,n+1):
         formula.append(clause_v_i)
 
 
-formula.append("x_{v} >= k constraint:")
+formula.append("x_{v} = k constraint:")
 
 # \sum x_{v} >= k
-xv_k = CardEnc.atleast(lits=list(range(n+1, 2*n+1)), 
+xv_k = CardEnc.equals(lits=list(range(n+1, 2*n+1)), 
                     bound=k, top_id = (len(sel.family) + 2)*n + 1, encoding=EncType.seqcounter)
 greatest_id = -1
 for clause in xv_k:
@@ -261,10 +261,11 @@ else:
     model = g.get_model()
     k_subset = []
     print("Model:")
-    print(model)
+    print(model[:2*n+1])
     for xv in range(n+1, 2*n+1):
         if model[xv - 1] > 0:
             k_subset.append(xv)
+    print("k_subset: " + str(k_subset))
     sel.print_sel(k_subset)
 
 print("Successfully terminated")
