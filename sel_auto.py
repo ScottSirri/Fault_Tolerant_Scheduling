@@ -10,6 +10,11 @@ INVALID = -1
 
 BINARY = 1 # Inclusive upper bound on values of ILP integer variables
 
+c, d = 2, 2
+NAIVE = False
+
+print("c, d = %d, %d" % (c,d))
+
 # Helper function for output purposes
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
@@ -18,6 +23,8 @@ def intersection(lst1, lst2):
 # Helper function for parsing string, extracting integers
 def extract_vars_constraints(string):
     ints = re.findall(r'\d+', string)
+    if len(ints) < 11:
+        return [-1,-1]
     return [int(ints[0]), int(ints[5])+int(ints[7])+int(ints[9])+int(ints[10])]
 
 def is_prime(num):
@@ -115,13 +122,14 @@ class Selector:
 
     # For the purposes of sanity check on verifying ILP correctness... except
     # it doesn't produce a selector that's disqualified by my ILP as often as
-    # I think it should...
+    # I think it should... perhaps this is practically better than I thought???
     def populate_incorrectly(self):
         num_collections = math.ceil(self.d * log(self.n))
         collection_size = math.ceil(self.c * self.k)
         sel_family_size = num_collections * collection_size
         # Achieve the same approximate proportion of element membership
-        p = num_collections/sel_family_size
+        #p = num_collections/sel_family_size
+        p = .4
 
         self.family = []
         for i in range(sel_family_size):
@@ -306,11 +314,11 @@ class ILP:
             return
         print("===== Var dumping ====")
         num_sel = 0
-        for z in self.z_vars:
-            print(str(z))
-            num_sel += self.solver.Value(z)
-            if self.solver.Value(z) > 0:
-                print(str(z))
+        #for z in self.z_vars:
+        #    print(str(z))
+        #    num_sel += self.solver.Value(z)
+        #    if self.solver.Value(z) > 0:
+        #        print(str(z))
         for v in range(self.selector.n):
             var = self.x_vars[v]
             if self.solver.Value(var) != 1:
@@ -359,8 +367,12 @@ class ILP:
         local_timer.stop_timer()
         run_time = local_timer.get_time()
         
-        print("Selector size: %03d, # ILP vars: %05d, # ILP constraints: %05d"
-              % (len(self.selector.family), num_vars, num_constraints))
+        if num_vars > 0 and num_constraints > 0:
+            print("Selector size: %03d, # ILP vars: %05d, # ILP constraints: %05d"
+                  % (len(self.selector.family), num_vars, num_constraints))
+        else:
+            print("Selector size: %03d" % len(self.selector.family))
+
         print("    Time to generate vs run ILP: %.3f vs %.3f\t" % 
               (gen_time, run_time))
         results = self.display_results()
@@ -394,15 +406,12 @@ def naive_verify(selector):
     my_timer.stop_timer()
     return [VALID, my_timer.get_time()]
 
-# The main code that's run
 
-c, d = 2, 3
-NAIVE = False
+# The main code that's run
 if NAIVE:
     lower, upper, step = 21, 100, 2
 else:
-    lower, upper, step = 105, 200, 10
-    
+    lower, upper, step = 30, 200, 10
 
 for n_ind in range(lower, upper + step, step):
     n = n_ind
@@ -417,7 +426,7 @@ for n_ind in range(lower, upper + step, step):
     for i in range(iters):
         print("%02d)." % (i+1), end = '')
         sel = Selector(n, k, r, c, d)
-        #sel.populate_incorrectly(c, d)
+        #sel.populate_incorrectly()
         sel.populate()
         sel.validate()
         if not NAIVE:
