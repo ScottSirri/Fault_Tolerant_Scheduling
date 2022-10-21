@@ -52,6 +52,7 @@ class Selector:
                 if len(sel_set) > 0: 
                     self.family.append(sel_set)
 
+    # Generates an invalid selector for testing purposes
     def bad_populate(self):
         num_collections = math.ceil(self.d * math.log(self.n))
         collection_size = math.ceil(self.c * self.k)
@@ -222,7 +223,7 @@ for v in range(1,n+1):
 
 formula.append("x_{v} = k constraint:")
 
-# \sum x_{v} >= k
+# \sum x_{v} = k
 xv_k = CardEnc.equals(lits=list(range(n+1, 2*n+1)), 
                     bound=k, top_id = (len(sel.family) + 2)*n + 1, encoding=EncType.seqcounter)
 greatest_id = -1
@@ -242,9 +243,9 @@ for clause in zv_r:
     g.add_clause(clause)
     formula.append(clause)
 
-#print_clauses(formula)
+print_clauses(formula)
 
-print("   # vars: " + str(g.nof_vars()))
+print("   # vars: " + str(g.nof_vars()) + f" ({(len(sel.family) + 2)*n} non-auxiliary)")
 print("# clauses: " + str(g.nof_clauses()))
 
 print("   Satisfiable: ", end='')
@@ -254,10 +255,7 @@ print(sat)
 print("Valid selector: " + str(not sat))
 print("    Time spent: " + str(g.time()))
 
-if not sat:
-    print("Core: ", end='')
-    print(g.get_core())
-else:
+if sat:
     model = g.get_model()
     k_subset = []
     print("Model:")
