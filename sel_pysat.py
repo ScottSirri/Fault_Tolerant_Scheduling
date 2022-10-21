@@ -118,7 +118,8 @@ else:
 
 # Creating and populating the selector
 sel = Selector(n, k, r, c, d)
-sel.bad_populate()
+#sel.bad_populate()
+sel.populate()
 sel.print_sel()
 
 # Validate the selector
@@ -150,18 +151,44 @@ def get_var_num(var_data):
     else:
         return "INVALID"
 def get_var_name(var_num):
+    if var_num < 0:
+        var_num *= -1
     if 1 <= var_num and var_num <= n:
         return ["z", var_num]
     elif n+1 <= var_num and var_num <= 2*n:
         return ["x", var_num - n]
-    elif 2*n+1 <= var_num:
-        i = (var_num - 2*n) / n + 1
+    elif 2*n+1 <= var_num and var_num <= (len(sel.family) + 2) * n:
+        i = math.floor((var_num - 2*n) / n + 1)
         v = (var_num - 2*n) % n
         return ["y", i, v]
+    elif (len(sel.family) + 2) * n < var_num:
+        return ["AUX", var_num]
     else:
         return "INVALID"
+def print_clauses(formula):
+    print("Clauses: ", end='')
+    for clause in formula:
+        if type(clause) == str:
+            continue
+        for num in clause:
+            var_name = get_var_name(num)
+            num_str = ""
+            if var_name[0] != "AUX":
+                if num < 0:
+                    num_str = "!"
+                num_str = num_str + var_name[0]
+                if var_name[0] == 'y':
+                    num_str = num_str + str(var_name[1]) + "," + str(var_name[2])
+                else:
+                    num_str = num_str + str(var_name[1])
+            else:
+                num_str = var_name[0] + str(var_name[1])
+            #print(f"{num}={num_str}   ",end='')
+            print(f"{num_str}   ",end='')
+        print()
 
-formula = []
+
+formula = [] # Not integral to calculation, just for display
 
 # Had to do a little distributing to get this into CNF
 
@@ -193,22 +220,29 @@ for v in range(1,n+1):
         formula.append(clause_v_i)
 
 
+formula.append("x_{v} >= k constraint:")
+
 # \sum x_{v} >= k
 xv_k = CardEnc.atleast(lits=list(range(n+1, 2*n+1)), 
-                       bound=k, encoding=EncType.seqcounter)
+                    bound=k, top_id = (len(sel.family) + 2)*n + 1, encoding=EncType.seqcounter)
+greatest_id = -1
 for clause in xv_k:
     g.add_clause(clause)
     formula.append(clause)
+    for num in clause:
+        if abs(num) > greatest_id:
+            greatest_id = abs(num)
+
+formula.append("z_{v} < r constraint:")
 
 # \sum z_{v} < r
 zv_r = CardEnc.atmost(lits=list(range(1, n+1)), 
-                      bound=r-1, encoding=EncType.seqcounter)
+                      bound=r-1, top_id = greatest_id + 1, encoding=EncType.seqcounter)
 for clause in zv_r:
     g.add_clause(clause)
     formula.append(clause)
 
-print("Clauses: ", end='')
-print(formula)
+#print_clauses(formula)
 
 print("   # vars: " + str(g.nof_vars()))
 print("# clauses: " + str(g.nof_clauses()))
@@ -218,14 +252,19 @@ sat = g.solve()
 print(sat)
 
 print("Valid selector: " + str(not sat))
-
 print("    Time spent: " + str(g.time()))
 
 if not sat:
     print("Core: ", end='')
     print(g.get_core())
 else:
+    model = g.get_model()
+    k_subset = []
     print("Model:")
-    print(g.get_model())
+    print(model)
+    for xv in range(n+1, 2*n+1):
+        if model[xv - 1] > 0:
+            k_subset.append(xv)
+    sel.print_sel(k_subset)
 
 print("Successfully terminated")
