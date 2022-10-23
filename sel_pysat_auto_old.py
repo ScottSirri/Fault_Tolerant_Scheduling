@@ -9,8 +9,8 @@ INVALID = -1
 NOT = -1
 
 # Ball-bin generation method parameters
-c = 5
-d = 4
+c = 15
+d = 3
 
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
@@ -158,7 +158,6 @@ def prep_sel(n, k, r, c, d):
     return sel
 
 def selection_constraints(solver, formula):
-    num_sel_consts = 0
     # Had to do a little distributing to get this into CNF
     for v in range(1,n+1):
         zv,xv = get_var_num(["z",v]), get_var_num(["x",v])
@@ -166,7 +165,7 @@ def selection_constraints(solver, formula):
             yiv = get_var_num(["y",i,v])
             v_in_Si = False
 
-            clause_v_i = [zv, NOT * xv] # Technically, there'd also be a NOT * v_in_Si
+            clause_v_i = [zv, NOT * xv, NOT * yiv]
             for x_num_raw in sel.family[i-1]:
                 if x_num_raw != v:
                     x_not_v = get_var_num(["x", x_num_raw])
@@ -175,11 +174,14 @@ def selection_constraints(solver, formula):
                     # Not strictly in the original formula, but this makes it 
                     # necessary to set yiv=1 constant for each v in each Si
                     v_in_Si = True
-                    break
-            if v_in_Si == True: # If v isn't in Si, the clause is trivially true
-                num_sel_consts += 2
-                solver.add_clause(clause_v_i)
-                formula.append(clause_v_i)
+            if v_in_Si:
+                solver.add_clause([yiv])
+                formula.append([yiv])
+            else:
+                solver.add_clause([NOT * yiv])
+                formula.append([NOT * yiv])
+            solver.add_clause(clause_v_i)
+            formula.append(clause_v_i)
 
 def card_constraints(solver, formula):
     # \sum x_{v} = k
@@ -200,7 +202,7 @@ def card_constraints(solver, formula):
         solver.add_clause(clause)
         formula.append(clause)
 
-for n in range (500, 600, 50):
+for n in range (200, 350, 10):
     k = math.ceil(math.sqrt(n))
     r = math.ceil(k / 2.0)
 
@@ -211,24 +213,24 @@ for n in range (500, 600, 50):
         
         sel = prep_sel(n, k, r, c, d)
 
-        model = Cadical(use_timer = True) # Arbitrary, choose a more suitable solver later
+        g = Cadical(use_timer = True) # Arbitrary, choose a more suitable solver later
         formula = [] # Not integral to calculation, just for display
 
-        selection_constraints(model, formula)
-        card_constraints(model, formula)
+        selection_constraints(g, formula)
+        card_constraints(g, formula)
 
         #print_clauses(formula)
-        print("   # vars: " + str(model.nof_vars()) + f" ({(len(sel.family) + 2)*n} non-auxiliary)")
-        print("# clauses: " + str(model.nof_clauses()))
+        print("   # vars: " + str(g.nof_vars()) + f" ({(len(sel.family) + 2)*n} non-auxiliary)")
+        print("# clauses: " + str(g.nof_clauses()) + "(vs formula " + str(len(formula)) + ")")
 
-        sat = model.solve()
+        sat = g.solve()
 
         print("Valid selector: " + str(not sat))
-        avg_time += model.time()
-        print("    Time spent: " + str(model.time()))
+        avg_time += g.time()
+        print("    Time spent: " + str(g.time()))
 
         if sat: # Only when invalid selector
-            model = model.get_model()
+            model = g.get_model()
             k_subset = []
             print("Model:")
             print(model[:2*n+1])
