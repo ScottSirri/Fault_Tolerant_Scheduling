@@ -10,7 +10,7 @@ NOT = -1
 
 # Ball-bin generation method parameters
 c = 2
-d = 3
+d = 2
 
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
@@ -204,7 +204,7 @@ def card_constraints(solver, formula):
         g.add_clause(clause)
         formula.append(clause)
 
-for n in range (120, 150, 10):
+for n in range (80, 150, 10):
     k = math.ceil(math.sqrt(n))
     r = math.ceil(k / 2.0)
 
