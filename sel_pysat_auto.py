@@ -9,7 +9,7 @@ INVALID = -1
 NOT = -1
 
 # Ball-bin generation method parameters
-c = 5
+#c = 4.5
 d = 4
 
 def intersection(lst1, lst2):
@@ -200,45 +200,51 @@ def card_constraints(solver, formula):
         solver.add_clause(clause)
         formula.append(clause)
 
-for n in range (500, 600, 50):
-    k = math.ceil(math.sqrt(n))
-    r = math.ceil(k / 2.0)
+EV = 0
 
-    avg_time = 0
-    num_iters = 10
-    print(f"GENERATING ({n}, {k}, {r})-SELECTORS:")
-    for i in range(num_iters):
+for n in range (400, 900, 100):
+    for c in range(5,1,-3):
         
-        sel = prep_sel(n, k, r, c, d)
+        k = math.ceil(math.sqrt(n))
+        r = math.ceil(k / 2.0)
 
-        model = Cadical(use_timer = True) # Arbitrary, choose a more suitable solver later
-        formula = [] # Not integral to calculation, just for display
+        avg_time = 0
+        num_iters = 10
+        print(f"GENERATING ({n}, {k}, {r})-SELECTORS for (c,d)=({c},{d}):")
+        for i in range(num_iters):
+            
+            sel = prep_sel(n, k, r, c, d)
 
-        selection_constraints(model, formula)
-        card_constraints(model, formula)
+            model = Cadical(use_timer = True) # Arbitrary, choose a more suitable solver later
+            formula = [] # Not integral to calculation, just for display
 
-        #print_clauses(formula)
-        print("   # vars: " + str(model.nof_vars()) + f" ({(len(sel.family) + 2)*n} non-auxiliary)")
-        print("# clauses: " + str(model.nof_clauses()))
+            selection_constraints(model, formula)
+            card_constraints(model, formula)
 
-        sat = model.solve()
+            #print_clauses(formula)
+            if i == 0:
+                print("   # vars: " + str(model.nof_vars()) + f" ({(len(sel.family) + 2)*n} non-auxiliary)")
+                print("# clauses: " + str(model.nof_clauses()))
 
-        print("Valid selector: " + str(not sat))
-        avg_time += model.time()
-        print("    Time spent: " + str(model.time()))
+            print("/",end='',flush=True)
+            sat = model.solve()
 
-        if sat: # Only when invalid selector
-            model = model.get_model()
-            k_subset = []
-            print("Model:")
-            print(model[:2*n+1])
-            for xv in range(n+1, 2*n+1):
-                if model[xv - 1] > 0:
-                    k_subset.append(xv)
-            print("k_subset: " + str(k_subset))
-            sel.print_sel(k_subset)
-    avg_time /= num_iters
-    print("AVG_TIME = " + str(avg_time))
-    print("=============================================================\n")
+        #/print("Valid selector: " + str(not sat))
+            avg_time += model.time()
+            #print("    Time spent: " + str(model.time()))
+
+            if sat: # Only when invalid selector
+                model = model.get_model()
+                k_subset = []
+                print("Model:")
+                print(model[:2*n+1])
+                for xv in range(n+1, 2*n+1):
+                    if model[xv - 1] > 0:
+                        k_subset.append(xv)
+                print("k_subset: " + str(k_subset))
+                sel.print_sel(k_subset)
+        avg_time /= num_iters
+        print("AVG_TIME = " + str(avg_time))
+        print("=============================================================\n")
 
 print("Successfully terminated")
