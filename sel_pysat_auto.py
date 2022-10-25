@@ -9,8 +9,8 @@ INVALID = -1
 NOT = -1
 
 # Ball-bin generation method parameters
-#c = 4.5
-d = 4
+c = 2
+d = 2
 
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
@@ -107,28 +107,26 @@ def get_var_num(var_data):
         return var_data[1]
     elif var_data[0] == "x":
         return n + var_data[1]
-    elif var_data[0] == "y":
-        i,v = var_data[1],var_data[2]
-        return (i+1)*n + v
+    #elif var_data[0] == "y":
+    #    i,v = var_data[1],var_data[2]
+    #    return (i+1)*n + v # The first selector set Si has i=1
     else:
         return "INVALID"
 def get_var_name(var_num):
+    # Negation
     if var_num < 0:
         var_num *= -1
+
     if 1 <= var_num and var_num <= n:
         return ["z", var_num]
     elif n+1 <= var_num and var_num <= 2*n:
         return ["x", var_num - n]
-    elif 2*n+1 <= var_num and var_num <= (len(sel.family) + 2) * n:
-        i = math.floor((var_num - 2*n) / n + 1)
-        v = (var_num - 2*n) % n
-        return ["y", i, v]
-    elif (len(sel.family) + 2) * n < var_num:
+    elif 2*n+1 <= var_num:
         return ["AUX", var_num]
     else:
         return "INVALID"
 def print_clauses(formula):
-    print("Clauses: ", end='')
+    print("Clauses: ")
     for clause in formula:
         if type(clause) == str:
             continue
@@ -163,7 +161,6 @@ def selection_constraints(solver, formula):
     for v in range(1,n+1):
         zv,xv = get_var_num(["z",v]), get_var_num(["x",v])
         for i in range(1,len(sel.family)+1):
-            yiv = get_var_num(["y",i,v])
             v_in_Si = False
 
             clause_v_i = [zv, NOT * xv] # Technically, there'd also be a NOT * v_in_Si
@@ -172,10 +169,7 @@ def selection_constraints(solver, formula):
                     x_not_v = get_var_num(["x", x_num_raw])
                     clause_v_i.append(x_not_v)
                 else:
-                    # Not strictly in the original formula, but this makes it 
-                    # necessary to set yiv=1 constant for each v in each Si
                     v_in_Si = True
-                    break
             if v_in_Si == True: # If v isn't in Si, the clause is trivially true
                 num_sel_consts += 2
                 solver.add_clause(clause_v_i)
@@ -184,7 +178,7 @@ def selection_constraints(solver, formula):
 def card_constraints(solver, formula):
     # \sum x_{v} = k
     xv_k = CardEnc.equals(lits=list(range(n+1, 2*n+1)), 
-                    bound=k, top_id = (len(sel.family) + 2)*n + 1, encoding=EncType.seqcounter)
+                    bound=k, top_id = 2*n + 1, encoding=EncType.seqcounter)
     greatest_id = -1
     for clause in xv_k:
         solver.add_clause(clause)
@@ -200,8 +194,55 @@ def card_constraints(solver, formula):
         solver.add_clause(clause)
         formula.append(clause)
 
-EV = 0
+for n in range (30, 120, 10):
+    k = math.ceil(math.sqrt(n))
+    r = math.ceil(k / 2.0)
 
+    avg_time = 0
+    num_iters = 10
+    print(f"GENERATING ({n}, {k}, {r})-SELECTORS for (c,d)=({c},{d}):")
+    for i in range(num_iters):
+        
+        sel = prep_sel(n, k, r, c, d)
+
+        model = Cadical(use_timer = True) # Arbitrary, choose a more suitable solver later
+        formula = [] # Not integral to calculation, just for display
+
+        selection_constraints(model, formula)
+        card_constraints(model, formula)
+
+        print_clauses(formula)
+        #for clause in formula:
+        #    print(clause)
+
+        if i == 0:
+            print("   # vars: " + str(model.nof_vars()) +
+                  f" ({(len(sel.family) + 2)*n} non-auxiliary)")
+            print("# clauses: " + str(model.nof_clauses()))
+
+        sat = model.solve()
+
+        print("Valid selector: " + str(not sat))
+        avg_time += model.time()
+        print("    Time spent: " + str(model.time()))
+
+        if sat: # Only when invalid selector
+            model = model.get_model()
+            k_subset = []
+            print("Model:")
+            print(model[:2*n+1])
+            for xv in range(n+1, 2*n+1):
+                if model[xv - 1] > 0:
+                    k_subset.append(get_var_name(xv)[1])
+            print("k_subset: " + str(k_subset))
+            sel.print_sel(k_subset)
+        else:
+            sel.print_sel()
+        input()
+    avg_time /= num_iters
+    print("AVG_TIME = " + str(avg_time))
+    print("=============================================================\n")
+"""
 for n in range (400, 900, 100):
     for c in range(5,1,-3):
         
@@ -246,5 +287,5 @@ for n in range (400, 900, 100):
         avg_time /= num_iters
         print("AVG_TIME = " + str(avg_time))
         print("=============================================================\n")
-
+"""
 print("Successfully terminated")

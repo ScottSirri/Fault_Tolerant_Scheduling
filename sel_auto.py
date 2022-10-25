@@ -10,7 +10,7 @@ INVALID = -1
 
 BINARY = 1 # Inclusive upper bound on values of ILP integer variables
 
-c, d = 2, 2
+c, d = 1, 2
 NAIVE = False
 
 print("c, d = %d, %d" % (c,d))
