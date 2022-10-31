@@ -19,6 +19,47 @@ def intersection(lst1, lst2):
 class InputError(Exception):
     pass
 
+# Utility class for timing code execution
+class My_Timer:
+    def __init__(self):
+        self.start_time = -1
+        self.end_time = -1
+
+    # Start the timer
+    def start_timer(self):
+        if self.start_time <= 0:
+            self.start_time = time.time()
+        else:
+            print("start_timer error")
+
+    # Stop the timer
+    def stop_timer(self):
+        if self.end_time <= 0 and self.start_time > 0:
+            self.end_time = time.time()
+        else:
+            print("stop_timer error")
+
+    # Print the timer duration and reset it
+    def print_timer(self):
+        if self.start_time <= 0 or self.end_time <= self.start_time:
+            print("print_timer error")
+            return
+        elapsed = self.end_time - self.start_time
+        print("Time elapsed: %.3f" % elapsed)
+        self.start_time = -1
+        self.end_time = -1
+        return elapsed
+    
+    # Get the timer duration and reset it
+    def get_time(self):
+        if self.start_time <= 0 or self.end_time <= self.start_time:
+            print("get_time error")
+            return
+        elapsed = self.end_time - self.start_time
+        self.start_time = -1
+        self.end_time = -1
+        return elapsed
+
 class Selector:
     family = []
 
@@ -34,6 +75,7 @@ class Selector:
         num_collections = math.ceil(self.d * math.log(self.n))
         collection_size = math.ceil(self.c * self.k)
         sel_family_size = num_collections * collection_size
+        #print(f"num_collections={num_collections}, collection_size={collection_size}")
 
         self.family = []
         for i in range(num_collections):
@@ -88,7 +130,10 @@ class Selector:
             if len(intersection(sel_set, selected_list)) == 1:
                    marker = "*** "
             print(marker, end = '')
-            print(sel_set)
+            #print(sel_set)
+            for elem in sel_set:
+                print(f" .{elem}. ", end="")
+            print()
         print()
 
 
@@ -174,7 +219,6 @@ def card_constraints(solver, formula):
     # \sum x_{v} = k
     xv_k = CardEnc.equals(lits=list(range(n+1, 2*n+1)), 
                     bound=k, top_id = 2*n + 1, encoding=EncType.mtotalizer)
-                    #bound=k, top_id = 2*n + 1, encoding=EncType.seqcounter)
     greatest_id = -1
     for clause in xv_k:
         solver.add_clause(clause)
@@ -186,20 +230,20 @@ def card_constraints(solver, formula):
     # \sum z_{v} < r
     zv_r = CardEnc.atmost(lits=list(range(1, n+1)), 
                           bound=r-1, top_id = greatest_id + 1, encoding=EncType.mtotalizer)
-                         # bound=r-1, top_id = greatest_id + 1, encoding=EncType.seqcounter)
     for clause in zv_r:
         solver.add_clause(clause)
         formula.append(clause)
 
-
+"""
 # main
 for c in range(14,1,-3):
-    for n in range(100, 600, 100):
+    for n in range(10, 501, 10):
         k = math.ceil(math.sqrt(n))
-        r = math.ceil(k / 2.0)
+        #r = math.ceil(k / 2.0)
+        r = k
 
         avg_time = 0
-        num_iters = 5
+        num_iters = 10
         print(f"GENERATING ({n}, {k}, {r})-SELECTORS for (c,d)=({c},{d}):")
         for i in range(num_iters):
             
@@ -230,11 +274,82 @@ for c in range(14,1,-3):
                 print(model[:2*n+1])
                 for xv in range(n+1, 2*n+1):
                     if model[xv - 1] > 0:
-                        k_subset.append(xv)
+                        k_subset.append(xv - n)
                 print("k_subset: " + str(k_subset))
                 sel.print_sel(k_subset)
             model.delete()
         avg_time /= num_iters
         print("AVG_TIME = " + str(avg_time))
         print("=============================================================\n")
+"""
+
+def my_trunc(num):
+    num *= 100
+    num = math.trunc(num)
+    num /= 100
+    return num
+
+data = {}
+for sum_vals in range(8,40,4):
+    c = math.floor(sum_vals / 2)
+    d = math.floor(sum_vals / 2)
+    if sum_vals % 2 == 1:
+        c += 1
+    for n in range(100, 501, 100):
+        k = math.ceil(math.sqrt(n))
+        r = k
+
+        avg_solve_time = 0
+        avg_gen_time = 0
+        num_correct = 0
+        num_iters = 10
+        print(f"GENERATING ({n}, {k}, {r})-SELECTORS for (c,d)=({c},{d}): ")
+        for i in range(num_iters):
+            
+            sel = prep_sel(n, k, r, c, d)
+
+            model = Cadical(use_timer = True) # Arbitrary, choose a more suitable solver later
+            formula = [] # Not integral to calculation, just for display
+
+            model_timer = My_Timer()
+            model_timer.start_timer()
+
+            selection_constraints(model, formula)
+            card_constraints(model, formula)
+
+            model_timer.stop_timer()
+            avg_gen_time += model_timer.get_time()
+
+            #print_clauses(formula)
+            if i == 0:
+                print("   # vars: " + str(model.nof_vars()) + f" ({2*n} non-auxiliary)")
+                print("# clauses: " + str(model.nof_clauses()))
+
+            sat = model.solve()
+            avg_solve_time += model.time()
+
+            if sat: # Only when invalid selector
+                """
+                model = model.get_model()
+                k_subset = []
+                print("Model:")
+                print(model[:2*n])
+                for xv in range(n+1, 2*n+1):
+                    if model[xv - 1] > 0:
+                        k_subset.append(xv - n)
+                print("k_subset: " + str(k_subset))
+                sel.print_sel(k_subset)
+                """
+                print("|",end="",flush=True)
+            else:
+                print(".",end="",flush=True)
+                num_correct += 1
+                model.delete()
+        avg_solve_time /= num_iters
+        avg_gen_time /= num_iters
+
+        print(f"  [{n},{c},{d}]: [{my_trunc(avg_gen_time)}, {my_trunc(avg_solve_time)}, {num_correct}]")
+        if num_correct == 0:
+            break
+    print()
 print("Successfully terminated")
