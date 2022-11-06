@@ -10,7 +10,7 @@ INVALID = -1
 
 BINARY = 1 # Inclusive upper bound on values of ILP integer variables
 
-c, d = 1, 2
+c, d = 15, 3
 NAIVE = False
 
 print("c, d = %d, %d" % (c,d))
@@ -420,7 +420,7 @@ for n_ind in range(lower, upper + step, step):
     sel = Selector(n, k, r, c, d)
 
     print(f"=== ({n}, {k}, {r}) ===")
-    #print("MODULO size: %d" % sel.modulo_num_slots())
+    print("MODULO size: %d" % sel.modulo_num_slots())
     avg_gen_time, avg_run_time = 0, 0
     iters = 4
     for i in range(iters):

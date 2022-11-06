@@ -16,6 +16,26 @@ def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
     return lst3
 
+def is_prime(num):
+    if num < 2:
+        return False
+    for i in range(2, int(math.sqrt(num)) + 1):
+        if num % i == 0:
+            return False
+    return True
+
+# Generate the first num_primes prime numbers >= lower
+def generate_primes(lower, num_primes):
+    primes = []
+    i = lower
+    if i % 2 == 0:
+        i += 1
+    while len(primes) < num_primes:
+        if is_prime(i):
+            primes.append(i)
+        i += 2
+    return primes
+
 class InputError(Exception):
     pass
 
@@ -75,7 +95,6 @@ class Selector:
         num_collections = math.ceil(self.d * math.log(self.n))
         collection_size = math.ceil(self.c * self.k)
         sel_family_size = num_collections * collection_size
-        #print(f"num_collections={num_collections}, collection_size={collection_size}")
 
         self.family = []
         for i in range(num_collections):
@@ -88,6 +107,7 @@ class Selector:
             for sel_set in collection:
                 if len(sel_set) > 0: 
                     self.family.append(sel_set)
+        return [num_collections, collection_size]
 
     # Generates an invalid selector for testing purposes
     def bad_populate(self):
@@ -104,6 +124,18 @@ class Selector:
                     sel_set.append(element+1)
             if len(sel_set) > 0: 
                 self.family.append(sel_set)
+
+    # Returns the number of sets that would be in a selector of these
+    # parameters produced by the modulo mapping method in Dr. Agrawal's paper.
+    def modulo_num_slots(self):
+        n = self.n
+        k = self.k
+        num_collections = k * math.ceil(math.log(n) / math.log(k * math.log(n)))
+        primes = generate_primes(num_collections, math.floor(k * math.log(n)) + 1)
+        num_slots = 0
+        for prime in primes:
+            num_slots += prime
+        return num_slots
 
     # Validates that selector parameters are sensical
     def validate(self):
@@ -189,11 +221,11 @@ def print_clauses(formula):
 
 def prep_sel(n, k, r, c, d):
     sel = Selector(n, k, r, c, d)
-    sel.populate()
+    collection_data = sel.populate()
     if sel.validate() != VALID:
-        print("======================== Invalid selector ========================")
+        print("====================== Invalid selector ======================")
         raise InputError("Invalid selector")
-    return sel
+    return [sel, collection_data[0], collection_data[1]]
 
 def selection_constraints(solver, formula):
     num_sel_consts = 0
@@ -203,7 +235,7 @@ def selection_constraints(solver, formula):
         for i in range(1, len(sel.family)+1):
             v_in_Si = False
 
-            clause_v_i = [zv, NOT * xv] # Technically, there'd also be a NOT * v_in_Si
+            clause_v_i = [zv, NOT * xv] # Left out the NOT * v_in_Si
             for x_num_raw in sel.family[i-1]:
                 if x_num_raw != v:
                     x_not_v = get_var_num(["x", x_num_raw])
@@ -218,7 +250,7 @@ def selection_constraints(solver, formula):
 def card_constraints(solver, formula):
     # \sum x_{v} = k
     xv_k = CardEnc.equals(lits=list(range(n+1, 2*n+1)), 
-                    bound=k, top_id = 2*n + 1, encoding=EncType.mtotalizer)
+              bound=k, top_id = 2*n + 1, encoding=EncType.mtotalizer)
     greatest_id = -1
     for clause in xv_k:
         solver.add_clause(clause)
@@ -229,86 +261,39 @@ def card_constraints(solver, formula):
 
     # \sum z_{v} < r
     zv_r = CardEnc.atmost(lits=list(range(1, n+1)), 
-                          bound=r-1, top_id = greatest_id + 1, encoding=EncType.mtotalizer)
+              bound=r-1, top_id = greatest_id + 1, encoding=EncType.mtotalizer)
     for clause in zv_r:
         solver.add_clause(clause)
         formula.append(clause)
 
-"""
-# main
-for c in range(14,1,-3):
-    for n in range(10, 501, 10):
-        k = math.ceil(math.sqrt(n))
-        #r = math.ceil(k / 2.0)
-        r = k
-
-        avg_time = 0
-        num_iters = 10
-        print(f"GENERATING ({n}, {k}, {r})-SELECTORS for (c,d)=({c},{d}):")
-        for i in range(num_iters):
-            
-            sel = prep_sel(n, k, r, c, d)
-
-            model = Cadical(use_timer = True) # Arbitrary, choose a more suitable solver later
-            formula = [] # Not integral to calculation, just for display
-
-            selection_constraints(model, formula)
-            card_constraints(model, formula)
-
-            #print_clauses(formula)
-            if i == 0:
-                print("   # vars: " + str(model.nof_vars()) + f" ({2*n} non-auxiliary)")
-                print("# clauses: " + str(model.nof_clauses()))
-
-            sat = model.solve()
-            #print("/",end='',flush=True)
-
-            #print("Valid selector: " + str(not sat))
-            avg_time += model.time()
-            print(f"({i+1}/{num_iters}) Time spent: " + str(model.time()))
-
-            if sat: # Only when invalid selector
-                model = model.get_model()
-                k_subset = []
-                print("Model:")
-                print(model[:2*n+1])
-                for xv in range(n+1, 2*n+1):
-                    if model[xv - 1] > 0:
-                        k_subset.append(xv - n)
-                print("k_subset: " + str(k_subset))
-                sel.print_sel(k_subset)
-            model.delete()
-        avg_time /= num_iters
-        print("AVG_TIME = " + str(avg_time))
-        print("=============================================================\n")
-"""
-
 def my_trunc(num):
-    num *= 100
+    num *= 1000
     num = math.trunc(num)
-    num /= 100
+    num /= 1000
     return num
 
-data = {}
-for sum_vals in range(8,40,4):
-    c = math.floor(sum_vals / 2)
-    d = math.floor(sum_vals / 2)
-    if sum_vals % 2 == 1:
-        c += 1
+d = 3
+for c in range(22, 0, -2):
     for n in range(100, 501, 100):
+        #c = 20
         k = math.ceil(math.sqrt(n))
         r = k
 
-        avg_solve_time = 0
+        avg_solve_time_correct = 0
+        avg_solve_time_incorrect = 0
         avg_gen_time = 0
         num_correct = 0
-        num_iters = 10
-        print(f"GENERATING ({n}, {k}, {r})-SELECTORS for (c,d)=({c},{d}): ")
+        num_iters = 20
+        #print(f"GENERATING ({n}, {k}, {r})-SELECTORS for (c,d)=({c},{d}): ", end='')
         for i in range(num_iters):
             
-            sel = prep_sel(n, k, r, c, d)
+            sel_tuple = prep_sel(n, k, r, c, d)
+            sel = sel_tuple[0]
 
-            model = Cadical(use_timer = True) # Arbitrary, choose a more suitable solver later
+            #print(f"\n   sel size: {len(sel.family)}")
+            #print(f"modulo size: {sel.modulo_num_slots()}")
+
+            model = Cadical(use_timer = True)
             formula = [] # Not integral to calculation, just for display
 
             model_timer = My_Timer()
@@ -321,14 +306,17 @@ for sum_vals in range(8,40,4):
             avg_gen_time += model_timer.get_time()
 
             #print_clauses(formula)
+            """
             if i == 0:
-                print("   # vars: " + str(model.nof_vars()) + f" ({2*n} non-auxiliary)")
-                print("# clauses: " + str(model.nof_clauses()))
-
+                print(f"# vars = {model.nof_vars()} ({2*n} non-auxiliary), "
+                      f"# clauses = {model.nof_clauses()}, "
+                      f"Num collections = {sel_tuple[1]}, "
+                      f"Collection size = {sel_tuple[2]}")
+            """
             sat = model.solve()
-            avg_solve_time += model.time()
 
             if sat: # Only when invalid selector
+                avg_solve_time_incorrect += model.time()
                 """
                 model = model.get_model()
                 k_subset = []
@@ -339,17 +327,30 @@ for sum_vals in range(8,40,4):
                         k_subset.append(xv - n)
                 print("k_subset: " + str(k_subset))
                 sel.print_sel(k_subset)
+                input()
                 """
                 print("|",end="",flush=True)
             else:
+                avg_solve_time_correct += model.time()
                 print(".",end="",flush=True)
                 num_correct += 1
                 model.delete()
-        avg_solve_time /= num_iters
+        if num_correct == num_iters:
+            avg_solve_time_incorrect = -1
+        else:
+            avg_solve_time_incorrect /= (num_iters - num_correct)
+
+        if num_correct == 0:
+            avg_solve_time_correct = -1
+        else:
+            avg_solve_time_correct /= num_correct
+
         avg_gen_time /= num_iters
 
-        print(f"  [{n},{c},{d}]: [{my_trunc(avg_gen_time)}, {my_trunc(avg_solve_time)}, {num_correct}]")
-        if num_correct == 0:
-            break
-    print()
+        print(f"  [{n},{c},{d}]: [Gen:{my_trunc(avg_gen_time)}, Solve (correct):"
+              f"{my_trunc(avg_solve_time_correct)}, Solve (incorrect):{my_trunc(avg_solve_time_incorrect)}, {num_correct}/{num_iters}]")
+        #if num_correct < 2:
+        #    break
+        #print()
+    print("====================================================")
 print("Successfully terminated")
