@@ -8,10 +8,6 @@ INVALID = -1
 
 NOT = -1
 
-# Ball-bin generation method parameters
-c = 2
-d = 2
-
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
     return lst3
@@ -227,16 +223,16 @@ def prep_sel(n, k, r, c, d):
         raise InputError("Invalid selector")
     return [sel, collection_data[0], collection_data[1]]
 
-def selection_constraints(solver, formula):
+def selection_constraints(sel_in, k, r, solver, formula):
     num_sel_consts = 0
     # Had to do a little distributing to get this into CNF
     for v in range(1, n+1):
         zv,xv = get_var_num(["z",v]), get_var_num(["x",v])
-        for i in range(1, len(sel.family)+1):
+        for i in range(1, len(sel_in.family)+1):
             v_in_Si = False
 
             clause_v_i = [zv, NOT * xv] # Left out the NOT * v_in_Si
-            for x_num_raw in sel.family[i-1]:
+            for x_num_raw in sel_in.family[i-1]:
                 if x_num_raw != v:
                     x_not_v = get_var_num(["x", x_num_raw])
                     clause_v_i.append(x_not_v)
@@ -247,7 +243,7 @@ def selection_constraints(solver, formula):
                 solver.add_clause(clause_v_i)
                 formula.append(clause_v_i)
 
-def card_constraints(solver, formula):
+def card_constraints(sel_in, k, r, solver, formula):
     # \sum x_{v} = k
     xv_k = CardEnc.equals(lits=list(range(n+1, 2*n+1)), 
               bound=k, top_id = 2*n + 1, encoding=EncType.mtotalizer)
@@ -277,56 +273,45 @@ d = 3
 
 n_vals = [8, 16, 32, 64, 128, 256, 350, 450, 512]
 
-for n in n_vals:
+for n in n_vals: # Cycling through n values
     k_0 = math.ceil(math.sqrt(n))
     r_0 = math.ceil(k_0/2)
 
-    avg_solve_time_correct = 0
-    avg_solve_time_incorrect = 0
+    avg_total_time = 0
     avg_gen_time = 0
     num_correct = 0
     num_iters = 5
     print(f"GENERATING ({n}, {k_0}, {r_0})-SELECTORS for (c,d)=({c},{d}): ")
-    for i in range(num_iters):
+    for i in range(num_iters): # Generating & testing num_iters different selectors
+
+        sel_tuple = prep_sel(n, k_0, r_0, c, d)
+        print(f"Generating new ({n}, {k_0}, {r_0})-selector:")
+        sel = sel_tuple[0]
         
         reduc_index = 0
         valid = True
         k = k_0
-        while k > 1:
+
+        model_timer = My_Timer()
+        model_timer.start_timer()
+
+        while k > 1: # Logarithmically iterate over the SAME selector to check reducibility
             k = math.ceil(k / (2**reduc_index))
             r = math.ceil(k / 2)
-            print(f"reduc_index={reduc_index}, k={k}, r={r}")
-            sel_tuple = prep_sel(n, k, r, c, d)
-            sel = sel_tuple[0]
 
-            #print(f"\n   sel size: {len(sel.family)}")
-            #print(f"modulo size: {sel.modulo_num_slots()}")
+            print(f"\treduc_index={reduc_index}: Testing for ({n}, {k}, {r})-selector")
 
             model = Cadical(use_timer = True)
             formula = [] # Not integral to calculation, just for display
 
-            model_timer = My_Timer()
-            model_timer.start_timer()
+            selection_constraints(sel, k, r, model, formula)
+            card_constraints(sel, k, r, model, formula)
 
-            selection_constraints(model, formula)
-            card_constraints(model, formula)
-
-            model_timer.stop_timer()
-            avg_gen_time += model_timer.get_time()
-
-            #print_clauses(formula)
-            
-            #if i == 0:
-            #    print(f"# vars = {model.nof_vars()} ({2*n} non-auxiliary), "
-            #          f"# clauses = {model.nof_clauses()}, "
-            #          f"Num collections = {sel_tuple[1]}, "
-            #          f"Collection size = {sel_tuple[2]}")
-            
             sat = model.solve()
 
             
             if sat: # Only when invalid selector
-                avg_solve_time_incorrect += model.time()
+                #avg_solve_time_incorrect += model.time()
                 
                 model = model.get_model()
                 k_subset = []
@@ -338,39 +323,24 @@ for n in n_vals:
                 print("k_subset: " + str(k_subset))
                 sel.print_sel(k_subset)
                 input()
-                #print("|",end="",flush=True)
-                
                 print("invalid")
                 valid = False
             else:
-                avg_solve_time_correct += model.time()
-                #print(".",end="",flush=True)
-                num_correct += 1
                 model.delete()
 
             reduc_index += 1
+
+        model_timer.stop_timer()
+        avg_total_time += model_timer.get_time()
+
         if not valid:
             print("========INVALID SELECTOR========")
         else:
             print("\tValid selector\n")
+            num_correct += 1
             
-        if num_correct == num_iters:
-            avg_solve_time_incorrect = -1
-        else:
-            avg_solve_time_incorrect /= (num_iters - num_correct)
+    avg_total_time /= num_iters
 
-        if num_correct == 0:
-            avg_solve_time_correct = -1
-        else:
-            avg_solve_time_correct /= num_correct
-
-        avg_gen_time /= num_iters
-
-        #print(f"  [{n},{c},{d}]: [Gen:{my_trunc(avg_gen_time)}, Solve (correct):"
-        #      f"{my_trunc(avg_solve_time_correct)}, Solve (incorrect):"
-        #      f"{my_trunc(avg_solve_time_incorrect)}, {num_correct}/{num_iters}]")
-        #if num_correct < 2:
-        #    break
-        #print()
+    print(f"  [{n},{c},{d}]: avg_total_time={my_trunc(avg_total_time)}, {num_correct}/{num_iters}")
     print("====================================================")
 print("Successfully terminated")
