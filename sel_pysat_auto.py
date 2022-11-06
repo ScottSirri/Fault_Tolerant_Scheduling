@@ -272,21 +272,30 @@ def my_trunc(num):
     num /= 1000
     return num
 
+c = 3
 d = 3
-for c in range(22, 0, -2):
-    for n in range(100, 501, 100):
-        #c = 20
-        k = math.ceil(math.sqrt(n))
-        r = k
 
-        avg_solve_time_correct = 0
-        avg_solve_time_incorrect = 0
-        avg_gen_time = 0
-        num_correct = 0
-        num_iters = 20
-        #print(f"GENERATING ({n}, {k}, {r})-SELECTORS for (c,d)=({c},{d}): ", end='')
-        for i in range(num_iters):
-            
+n_vals = [8, 16, 32, 64, 128, 256, 350, 450, 512]
+
+for n in n_vals:
+    k_0 = math.ceil(math.sqrt(n))
+    r_0 = math.ceil(k_0/2)
+
+    avg_solve_time_correct = 0
+    avg_solve_time_incorrect = 0
+    avg_gen_time = 0
+    num_correct = 0
+    num_iters = 5
+    print(f"GENERATING ({n}, {k_0}, {r_0})-SELECTORS for (c,d)=({c},{d}): ")
+    for i in range(num_iters):
+        
+        reduc_index = 0
+        valid = True
+        k = k_0
+        while k > 1:
+            k = math.ceil(k / (2**reduc_index))
+            r = math.ceil(k / 2)
+            print(f"reduc_index={reduc_index}, k={k}, r={r}")
             sel_tuple = prep_sel(n, k, r, c, d)
             sel = sel_tuple[0]
 
@@ -306,18 +315,19 @@ for c in range(22, 0, -2):
             avg_gen_time += model_timer.get_time()
 
             #print_clauses(formula)
-            """
-            if i == 0:
-                print(f"# vars = {model.nof_vars()} ({2*n} non-auxiliary), "
-                      f"# clauses = {model.nof_clauses()}, "
-                      f"Num collections = {sel_tuple[1]}, "
-                      f"Collection size = {sel_tuple[2]}")
-            """
+            
+            #if i == 0:
+            #    print(f"# vars = {model.nof_vars()} ({2*n} non-auxiliary), "
+            #          f"# clauses = {model.nof_clauses()}, "
+            #          f"Num collections = {sel_tuple[1]}, "
+            #          f"Collection size = {sel_tuple[2]}")
+            
             sat = model.solve()
 
+            
             if sat: # Only when invalid selector
                 avg_solve_time_incorrect += model.time()
-                """
+                
                 model = model.get_model()
                 k_subset = []
                 print("Model:")
@@ -328,13 +338,22 @@ for c in range(22, 0, -2):
                 print("k_subset: " + str(k_subset))
                 sel.print_sel(k_subset)
                 input()
-                """
-                print("|",end="",flush=True)
+                #print("|",end="",flush=True)
+                
+                print("invalid")
+                valid = False
             else:
                 avg_solve_time_correct += model.time()
-                print(".",end="",flush=True)
+                #print(".",end="",flush=True)
                 num_correct += 1
                 model.delete()
+
+            reduc_index += 1
+        if not valid:
+            print("========INVALID SELECTOR========")
+        else:
+            print("\tValid selector\n")
+            
         if num_correct == num_iters:
             avg_solve_time_incorrect = -1
         else:
@@ -347,8 +366,9 @@ for c in range(22, 0, -2):
 
         avg_gen_time /= num_iters
 
-        print(f"  [{n},{c},{d}]: [Gen:{my_trunc(avg_gen_time)}, Solve (correct):"
-              f"{my_trunc(avg_solve_time_correct)}, Solve (incorrect):{my_trunc(avg_solve_time_incorrect)}, {num_correct}/{num_iters}]")
+        #print(f"  [{n},{c},{d}]: [Gen:{my_trunc(avg_gen_time)}, Solve (correct):"
+        #      f"{my_trunc(avg_solve_time_correct)}, Solve (incorrect):"
+        #      f"{my_trunc(avg_solve_time_incorrect)}, {num_correct}/{num_iters}]")
         #if num_correct < 2:
         #    break
         #print()
