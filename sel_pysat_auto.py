@@ -8,6 +8,8 @@ INVALID = -1
 
 NOT = -1
 
+DEBUG_INVALID = False
+
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
     return lst3
@@ -263,13 +265,13 @@ def card_constraints(sel_in, k, r, solver, formula):
         formula.append(clause)
 
 def my_trunc(num):
-    num *= 1000
+    num *= 10000
     num = math.trunc(num)
-    num /= 1000
+    num /= 10000
     return num
 
-c = 3
-d = 3
+c = 2
+d = 1
 
 n_vals = [8, 16, 32, 64, 128, 256, 350, 450, 512]
 
@@ -277,10 +279,12 @@ for n in n_vals: # Cycling through n values
     k_0 = math.ceil(math.sqrt(n))
     r_0 = math.ceil(k_0/2)
 
-    avg_total_time = 0
+    avg_valid_time, avg_invalid_time = 0, 0
+    solve_timer = My_Timer()
     avg_gen_time = 0
+    gen_timer = My_Timer()
     num_correct = 0
-    num_iters = 5
+    num_iters = 20
     print(f"GENERATING ({n}, {k_0}, {r_0})-SELECTORS for (c,d)=({c},{d}): ")
     for i in range(num_iters): # Generating & testing num_iters different selectors
 
@@ -292,55 +296,66 @@ for n in n_vals: # Cycling through n values
         valid = True
         k = k_0
 
-        model_timer = My_Timer()
-        model_timer.start_timer()
-
         while k > 1: # Logarithmically iterate over the SAME selector to check reducibility
             k = math.ceil(k / (2**reduc_index))
             r = math.ceil(k / 2)
 
-            print(f"\treduc_index={reduc_index}: Testing for ({n}, {k}, {r})-selector")
+            #print(f"\treduc_index={reduc_index}: Testing for ({n}, {k}, {r})-selector")
 
             model = Cadical(use_timer = True)
             formula = [] # Not integral to calculation, just for display
 
+            gen_timer.start_timer()
             selection_constraints(sel, k, r, model, formula)
             card_constraints(sel, k, r, model, formula)
+            gen_timer.stop_timer()
+            avg_gen_time += gen_timer.get_time()
 
+            solve_timer.start_timer()
             sat = model.solve()
+            solve_timer.stop_timer()
 
             
             if sat: # Only when invalid selector
-                #avg_solve_time_incorrect += model.time()
-                
-                model = model.get_model()
-                k_subset = []
-                print("Model:")
-                print(model[:2*n])
-                for xv in range(n+1, 2*n+1):
-                    if model[xv - 1] > 0:
-                        k_subset.append(xv - n)
-                print("k_subset: " + str(k_subset))
-                sel.print_sel(k_subset)
-                input()
-                print("invalid")
+                avg_invalid_time += solve_timer.get_time()
+                if DEBUG_INVALID == True:
+                    model = model.get_model()
+                    k_subset = []
+                    print("Model:")
+                    print(model[:2*n])
+                    for xv in range(n+1, 2*n+1):
+                        if model[xv - 1] > 0:
+                            k_subset.append(xv - n)
+                    print("k_subset: " + str(k_subset))
+                    sel.print_sel(k_subset)
+                    input()
                 valid = False
+                break
             else:
+                avg_valid_time += solve_timer.get_time()
                 model.delete()
 
             reduc_index += 1
-
-        model_timer.stop_timer()
-        avg_total_time += model_timer.get_time()
 
         if not valid:
             print("========INVALID SELECTOR========")
         else:
             print("\tValid selector\n")
             num_correct += 1
-            
-    avg_total_time /= num_iters
+    
+    avg_gen_time /= num_iters
 
-    print(f"  [{n},{c},{d}]: avg_total_time={my_trunc(avg_total_time)}, {num_correct}/{num_iters}")
+    if num_correct != 0:
+        avg_valid_time /= num_correct
+    else:
+        avg_valid_time = -1.0
+
+    if num_correct != num_iters:
+        avg_invalid_time /= num_correct
+    else:
+        avg_invalid_time = -1.0
+
+    print(f"  [{n},{c},{d}]: gen time={my_trunc(avg_gen_time)}, avg valid={my_trunc(avg_valid_time)},"
+          f" avg invalid={my_trunc(avg_invalid_time)}, {num_correct}/{num_iters}")
     print("====================================================")
 print("Successfully terminated")
