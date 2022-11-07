@@ -2,6 +2,8 @@ from pysat.solvers import Glucose3, Cadical
 from pysat.card import *
 import math, random
 import sys, time
+import csv, signal
+from datetime import datetime
 
 VALID = 0
 INVALID = -1
@@ -9,6 +11,33 @@ INVALID = -1
 NOT = -1
 
 DEBUG_INVALID = False
+
+program_start_time = time.time()
+
+logging_data = False
+
+if len(sys.argv) > 1:
+    if sys.argv[1] == 'log':
+        logging_data = True
+
+if logging_data:
+    now = datetime.now()
+    date_time_str = now.strftime("%Y_%m_%d-%H_%M_%S")
+    filename = './data/' + date_time_str
+
+    f = open(filename, 'w')
+    writer = csv.writer(f)
+
+def signal_handler(sig, frame):
+    print('\nYou pressed Ctrl+C')
+    if logging_data:
+        f.close()
+        print('closed file')
+    else:
+        print('not logging data, no file to close')
+    print('elapsed real time: ' + str(time.time() - program_start_time))
+    sys.exit(0)
+signal.signal(signal.SIGINT, signal_handler)
 
 def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
@@ -265,26 +294,31 @@ def card_constraints(sel_in, k, r, solver, formula):
         formula.append(clause)
 
 def my_trunc(num):
-    num *= 10000
+    num *= 1000
     num = math.trunc(num)
-    num /= 10000
+    num /= 1000
     return num
 
-c = 2
-d = 1
+c = 14
+d = 2
 
-for n in range(5,200,10): # Cycling through n values
+
+for n in range(100,501,100): # Cycling through n values
     k_0 = math.ceil(math.sqrt(n))
     r_0 = math.ceil(k_0/2)
 
-    avg_valid_time, avg_invalid_time = 0, 0
+    total_valid_time, total_invalid_time = 0, 0
     solve_timer = My_Timer()
-    avg_gen_time = 0
+    total_gen_time = 0
     gen_timer = My_Timer()
     num_correct = 0
     num_iters = 20
-    header_str = f"GENERATING ({n}, {k_0}, {r_0})-SELECTORS for (c,d)=({c},{d}): "
+    logging_str = ''
+    if not logging_data:
+        logging_str = '[NOT LOGGING] '
+    header_str = f"{logging_str}({n}, {k_0}, {r_0})-sels for (c,d)=({c},{d}): "
     print(header_str)
+    progress_bar = []
     for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
 
         sel_tuple = prep_sel(n, k_0, r_0, c, d)
@@ -294,6 +328,7 @@ for n in range(5,200,10): # Cycling through n values
         valid = True
         sub_index_invalid = False
         k = k_0
+
 
         while k > 1: # Logarithmically iterate over the SAME selector to check reducibility
 
@@ -310,7 +345,7 @@ for n in range(5,200,10): # Cycling through n values
             selection_constraints(sel, k, r, model, formula)
             card_constraints(sel, k, r, model, formula)
             gen_timer.stop_timer()
-            avg_gen_time += gen_timer.get_time()
+            total_gen_time += gen_timer.get_time()
 
             #Solve model
             solve_timer.start_timer()
@@ -318,7 +353,7 @@ for n in range(5,200,10): # Cycling through n values
             solve_timer.stop_timer()
 
             if sat: # Only when invalid selector
-                avg_invalid_time += solve_timer.get_time()
+                total_invalid_time += solve_timer.get_time()
                 valid = False
                 if reduc_index > 1:
                     sub_index_invalid = True
@@ -335,50 +370,41 @@ for n in range(5,200,10): # Cycling through n values
                     input()
                 break
             else: # Valid selector
-                avg_valid_time += solve_timer.get_time()
+                total_valid_time += solve_timer.get_time()
                 model.delete()
 
             reduc_index += 1 # Loop variable
 
+        # Outside the logarithmic while loop over k
         if not valid:
             if sub_index_invalid:
-                print("!", end="", flush = True)
+                progress_bar.append('!')
             else:
-                print("-", end="", flush = True)
+                progress_bar.append('-')
         else:
-            print("+", end="", flush = True)
+            progress_bar.append('+')
             num_correct += 1
 
         # Normalize times
-        avg_gen_time /= (iter_ind+1)
+        avg_gen_time = my_trunc(total_gen_time / (iter_ind+1))
 
         if num_correct != 0:
-            avg_valid_time /= num_correct
+            avg_valid_time = my_trunc(total_valid_time / num_correct)
         else:
             avg_valid_time = -1.0
 
         if num_correct != iter_ind:
-            avg_invalid_time /= (iter_ind - num_correct)
+            avg_invalid_time = my_trunc(total_invalid_time / (iter_ind - num_correct))
         else:
             avg_invalid_time = -1.0
-        stats_str = f" gen time={my_trunc(avg_gen_time)}, avg valid={my_trunc(avg_valid_time)}, avg invalid={my_trunc(avg_invalid_time)}, {num_correct}/{num_iters}"
-        print("\033[F\r" + header_str + stats_str)
-        print("THE ABOVE TIMER AVERAGING ARITHMETIC IS INCORRECT FIX THIS")
-    
-    # Normalize times
-    avg_gen_time /= num_iters
 
-    if num_correct != 0:
-        avg_valid_time /= num_correct
-    else:
-        avg_valid_time = -1.0
+        stats_str = f" gen time={avg_gen_time}, avg valid={avg_valid_time}, avg invalid={avg_invalid_time}, {num_correct}/{iter_ind+1}"
+        print (f"\033[A\r{' ' * (len(header_str) + len(stats_str) + 5)}\033[A")
+        print(header_str + stats_str)
+        for char in progress_bar:
+            print(char, end='', flush=True)
+    print()
+    #print("====================================================\n")
 
-    if num_correct != num_iters:
-        avg_invalid_time /= (num_iters - num_correct)
-    else:
-        avg_invalid_time = -1.0
-
-    print(f" gen time={my_trunc(avg_gen_time)}, avg valid={my_trunc(avg_valid_time)},"
-          f" avg invalid={my_trunc(avg_invalid_time)}, {num_correct}/{num_iters}")
-    print("====================================================\n")
 print("Successfully terminated")
+f.close()
