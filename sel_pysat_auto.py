@@ -27,15 +27,20 @@ if logging_data:
 
     f = open(filename, 'w')
     writer = csv.writer(f)
+    header = ['c', 'd', 'n', 'k', 'r', 'gen_time', 'solve_time', 'valid' ]
+    writer.writerow(header)
 
-def signal_handler(sig, frame):
-    print('\nYou pressed Ctrl+C')
+def clean_up():
     if logging_data:
         f.close()
         print('closed file')
     else:
         print('not logging data, no file to close')
     print('elapsed real time: ' + str(time.time() - program_start_time))
+
+def signal_handler(sig, frame):
+    print('\nYou pressed Ctrl+C')
+    clean_up()
     sys.exit(0)
 signal.signal(signal.SIGINT, signal_handler)
 
@@ -299,11 +304,11 @@ def my_trunc(num):
     num /= 1000
     return num
 
-c = 14
-d = 2
+c = 2
+d = 1
 
 
-for n in range(100,501,100): # Cycling through n values
+for n in range(5,501,5): # Cycling through n values
     k_0 = math.ceil(math.sqrt(n))
     r_0 = math.ceil(k_0/2)
 
@@ -345,15 +350,25 @@ for n in range(100,501,100): # Cycling through n values
             selection_constraints(sel, k, r, model, formula)
             card_constraints(sel, k, r, model, formula)
             gen_timer.stop_timer()
-            total_gen_time += gen_timer.get_time()
+            gen_time = gen_timer.get_time()
+            total_gen_time += gen_time
 
             #Solve model
             solve_timer.start_timer()
-            sat = model.solve()
+            try:
+                sat = model.solve()
+            except:
+                print("Exception occurred during the pysat ssolver's opeartion")
+                clean_up()
+                sys.exit(0)
             solve_timer.stop_timer()
+            solve_time = solve_timer.get_time()
+            
 
             if sat: # Only when invalid selector
-                total_invalid_time += solve_timer.get_time()
+                total_invalid_time += solve_time
+                data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'N']
+                writer.writerow(data_row)
                 valid = False
                 if reduc_index > 1:
                     sub_index_invalid = True
@@ -370,7 +385,9 @@ for n in range(100,501,100): # Cycling through n values
                     input()
                 break
             else: # Valid selector
-                total_valid_time += solve_timer.get_time()
+                total_valid_time += solve_time
+                data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'Y']
+                writer.writerow(data_row)
                 model.delete()
 
             reduc_index += 1 # Loop variable
