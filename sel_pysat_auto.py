@@ -1,7 +1,7 @@
 from pysat.solvers import Glucose3, Cadical
 from pysat.card import *
 import math, random
-import sys, time
+import sys, os, time
 import csv, signal
 from datetime import datetime
 
@@ -13,6 +13,17 @@ NOT = -1
 DEBUG_INVALID = False
 
 program_start_time = time.time()
+
+window_width = os.get_terminal_size().columns
+if window_width > 45:
+    print(f"{' ' * (math.floor(window_width / 2) - 22)}", end='', flush=True)
+print("DO NOT RESIZE WINDOW DURING PROGRAM EXECUTION")
+
+
+def resizeHandler(signum, frame):
+    window_width = os.get_terminal_size().columns
+    #print("resize-window signal caught")
+signal.signal(signal.SIGWINCH, resizeHandler)
 
 logging_data = False
 
@@ -247,7 +258,6 @@ def print_clauses(formula):
                     num_str = num_str + str(var_name[1])
             else:
                 num_str = var_name[0] + str(var_name[1])
-            #print(f"{num}={num_str}   ",end='')
             print(f"{num_str}   ",end='')
         print()
 
@@ -308,7 +318,7 @@ c = 2
 d = 1
 
 
-for n in range(5,501,5): # Cycling through n values
+for n in range(70,501,5): # Cycling through n values
     k_0 = math.ceil(math.sqrt(n))
     r_0 = math.ceil(k_0/2)
 
@@ -322,6 +332,7 @@ for n in range(5,501,5): # Cycling through n values
     if not logging_data:
         logging_str = '[NOT LOGGING] '
     header_str = f"{logging_str}({n}, {k_0}, {r_0})-sels for (c,d)=({c},{d}): "
+    lines_up = math.floor((len(header_str) - 1) / window_width) + 1
     print(header_str)
     progress_bar = []
     for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
@@ -357,8 +368,9 @@ for n in range(5,501,5): # Cycling through n values
             solve_timer.start_timer()
             try:
                 sat = model.solve()
-            except:
-                print("Exception occurred during the pysat ssolver's opeartion")
+            except Exception as err:
+                print("Exception occurred during the pysat solver's operation")
+                print(f"Unexpected {err=}, {type(err)=}")
                 clean_up()
                 sys.exit(0)
             solve_timer.stop_timer()
@@ -367,8 +379,9 @@ for n in range(5,501,5): # Cycling through n values
 
             if sat: # Only when invalid selector
                 total_invalid_time += solve_time
-                data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'N']
-                writer.writerow(data_row)
+                if logging_data:
+                    data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'N']
+                    writer.writerow(data_row)
                 valid = False
                 if reduc_index > 1:
                     sub_index_invalid = True
@@ -386,8 +399,9 @@ for n in range(5,501,5): # Cycling through n values
                 break
             else: # Valid selector
                 total_valid_time += solve_time
-                data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'Y']
-                writer.writerow(data_row)
+                if logging_data:
+                    data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'Y']
+                    writer.writerow(data_row)
                 model.delete()
 
             reduc_index += 1 # Loop variable
@@ -416,10 +430,20 @@ for n in range(5,501,5): # Cycling through n values
             avg_invalid_time = -1.0
 
         stats_str = f" gen time={avg_gen_time}, avg valid={avg_valid_time}, avg invalid={avg_invalid_time}, {num_correct}/{iter_ind+1}"
-        print (f"\033[A\r{' ' * (len(header_str) + len(stats_str) + 5)}\033[A")
+        
+        if lines_up < 0:
+            lines_up = 1
+        for i in range(lines_up):
+            print(f"\033[A\r{' ' * window_width}\r", end='', flush=True)
+
+        str_len = len(header_str) + len(stats_str)
+        lines_up = math.floor((str_len - 1) / window_width) + 1
+
+        #print(f"\r{' ' * window_width}\r", end='')
         print(header_str + stats_str)
         for char in progress_bar:
-            print(char, end='', flush=True)
+            print(char, end='')
+        #print(f'{window_width=}, {str_len=}, {lines_up=}', end='', flush=True)
     print()
     #print("====================================================\n")
 
