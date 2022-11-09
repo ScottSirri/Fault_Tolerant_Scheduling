@@ -15,9 +15,10 @@ DEBUG_INVALID = False
 program_start_time = time.time()
 
 window_width = os.get_terminal_size().columns
+resize_msg = "DO NOT RESIZE WINDOW DURING PROGRAM EXECUTION"
 if window_width > 45:
-    print(f"{' ' * (math.floor(window_width / 2) - 22)}", end='', flush=True)
-print("DO NOT RESIZE WINDOW DURING PROGRAM EXECUTION")
+    print(f"{' ' * (math.floor((window_width - len(resize_msg)) / 2))}", end='', flush=True)
+print(resize_msg)
 
 
 def resizeHandler(signum, frame):
@@ -38,7 +39,7 @@ if logging_data:
 
     f = open(filename, 'w')
     writer = csv.writer(f)
-    header = ['c', 'd', 'n', 'k', 'r', 'gen_time', 'solve_time', 'valid' ]
+    header = ['c', 'd', 'n', 'k', 'r', 'gen_time', 'solve_time', 'valid', 'sel_len']
     writer.writerow(header)
 
 def clean_up():
@@ -50,7 +51,7 @@ def clean_up():
     print('elapsed real time: ' + str(time.time() - program_start_time))
 
 def signal_handler(sig, frame):
-    print('\nYou pressed Ctrl+C')
+    print('\n\n\nYou pressed Ctrl+C')
     clean_up()
     sys.exit(0)
 signal.signal(signal.SIGINT, signal_handler)
@@ -314,138 +315,136 @@ def my_trunc(num):
     num /= 1000
     return num
 
-c = 2
-d = 1
+cd_vals = [[12,12], [12,8], [12,4], [8,12], [8,8], [4,12], [8,4], [4,8]]
+for pair in cd_vals:
+    c, d = pair[0], pair[1]
+    for n in range(100,501,100): # Cycling through n values
+        k_0 = math.ceil(math.sqrt(n))
+        r_0 = math.ceil(k_0/2)
 
+        total_valid_time, total_invalid_time = 0, 0
+        solve_timer = My_Timer()
+        total_gen_time = 0
+        gen_timer = My_Timer()
+        num_correct = 0
+        num_iters = 20
+        logging_str = ''
+        if not logging_data:
+            logging_str = '[NOT LOGGING] '
+        header_str = f"{logging_str}({n}, {k_0}, {r_0})-sels for (c,d)=({c},{d}): "
+        lines_up = math.floor((len(header_str) - 1) / window_width) + 1
+        print(header_str)
+        progress_bar = []
+        for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
 
-for n in range(70,501,5): # Cycling through n values
-    k_0 = math.ceil(math.sqrt(n))
-    r_0 = math.ceil(k_0/2)
-
-    total_valid_time, total_invalid_time = 0, 0
-    solve_timer = My_Timer()
-    total_gen_time = 0
-    gen_timer = My_Timer()
-    num_correct = 0
-    num_iters = 20
-    logging_str = ''
-    if not logging_data:
-        logging_str = '[NOT LOGGING] '
-    header_str = f"{logging_str}({n}, {k_0}, {r_0})-sels for (c,d)=({c},{d}): "
-    lines_up = math.floor((len(header_str) - 1) / window_width) + 1
-    print(header_str)
-    progress_bar = []
-    for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
-
-        sel_tuple = prep_sel(n, k_0, r_0, c, d)
-        sel = sel_tuple[0]
-        
-        reduc_index = 0
-        valid = True
-        sub_index_invalid = False
-        k = k_0
-
-
-        while k > 1: # Logarithmically iterate over the SAME selector to check reducibility
-
-            # Parameters for this iteration of reducibility check
-            k = math.ceil(k / (2**reduc_index))
-            r = math.ceil(k / 2)
-
-            # Initialize model
-            model = Cadical(use_timer = True)
-            formula = [] # Not integral to calculation, just for display
-
-            # Add constraints to model
-            gen_timer.start_timer()
-            selection_constraints(sel, k, r, model, formula)
-            card_constraints(sel, k, r, model, formula)
-            gen_timer.stop_timer()
-            gen_time = gen_timer.get_time()
-            total_gen_time += gen_time
-
-            #Solve model
-            solve_timer.start_timer()
-            try:
-                sat = model.solve()
-            except Exception as err:
-                print("Exception occurred during the pysat solver's operation")
-                print(f"Unexpected {err=}, {type(err)=}")
-                clean_up()
-                sys.exit(0)
-            solve_timer.stop_timer()
-            solve_time = solve_timer.get_time()
+            sel_tuple = prep_sel(n, k_0, r_0, c, d)
+            sel = sel_tuple[0]
             
+            reduc_index = 0
+            valid = True
+            sub_index_invalid = False
+            k = k_0
 
-            if sat: # Only when invalid selector
-                total_invalid_time += solve_time
-                if logging_data:
-                    data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'N']
-                    writer.writerow(data_row)
-                valid = False
-                if reduc_index > 1:
-                    sub_index_invalid = True
-                if DEBUG_INVALID == True: # Dump details of the invalid selector
-                    model = model.get_model()
-                    k_subset = []
-                    print("Model:")
-                    print(model[:2*n])
-                    for xv in range(n+1, 2*n+1):
-                        if model[xv - 1] > 0:
-                            k_subset.append(xv - n)
-                    print("k_subset: " + str(k_subset))
-                    sel.print_sel(k_subset)
-                    input()
-                break
-            else: # Valid selector
-                total_valid_time += solve_time
-                if logging_data:
-                    data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'Y']
-                    writer.writerow(data_row)
-                model.delete()
 
-            reduc_index += 1 # Loop variable
+            while k > 1: # Logarithmically iterate over the SAME selector to check reducibility
 
-        # Outside the logarithmic while loop over k
-        if not valid:
-            if sub_index_invalid:
-                progress_bar.append('!')
+                # Parameters for this iteration of reducibility check
+                k = math.ceil(k / (2**reduc_index))
+                r = math.ceil(k / 2)
+
+                # Initialize model
+                model = Cadical(use_timer = True)
+                formula = [] # Not integral to calculation, just for display
+
+                # Add constraints to model
+                gen_timer.start_timer()
+                selection_constraints(sel, k, r, model, formula)
+                card_constraints(sel, k, r, model, formula)
+                gen_timer.stop_timer()
+                gen_time = gen_timer.get_time()
+                total_gen_time += gen_time
+
+                #Solve model
+                solve_timer.start_timer()
+                try:
+                    sat = model.solve()
+                except Exception as err:
+                    print("\n\n\nException occurred during the pysat solver's operation")
+                    print(f"Unexpected {err=}, {type(err)=}")
+                    clean_up()
+                    sys.exit(0)
+                solve_timer.stop_timer()
+                solve_time = solve_timer.get_time()
+                
+
+                if sat: # Only when invalid selector
+                    total_invalid_time += solve_time
+                    if logging_data:
+                        data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'N', len(sel.family)]
+                        writer.writerow(data_row)
+                    valid = False
+                    if reduc_index > 1:
+                        sub_index_invalid = True
+                    if DEBUG_INVALID == True: # Dump details of the invalid selector
+                        model = model.get_model()
+                        k_subset = []
+                        print("Model:")
+                        print(model[:2*n])
+                        for xv in range(n+1, 2*n+1):
+                            if model[xv - 1] > 0:
+                                k_subset.append(xv - n)
+                        print("k_subset: " + str(k_subset))
+                        sel.print_sel(k_subset)
+                        input()
+                    break
+                else: # Valid selector
+                    total_valid_time += solve_time
+                    if logging_data:
+                        data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'Y', len(sel.family)]
+                        writer.writerow(data_row)
+                    model.delete()
+
+                reduc_index += 1 # Loop variable
+
+            # Outside the logarithmic while loop over k
+            if not valid:
+                if sub_index_invalid:
+                    progress_bar.append('!')
+                else:
+                    progress_bar.append('-')
             else:
-                progress_bar.append('-')
-        else:
-            progress_bar.append('+')
-            num_correct += 1
+                progress_bar.append('+')
+                num_correct += 1
 
-        # Normalize times
-        avg_gen_time = my_trunc(total_gen_time / (iter_ind+1))
+            # Normalize times
+            avg_gen_time = my_trunc(total_gen_time / (iter_ind+1))
 
-        if num_correct != 0:
-            avg_valid_time = my_trunc(total_valid_time / num_correct)
-        else:
-            avg_valid_time = -1.0
+            if num_correct != 0:
+                avg_valid_time = my_trunc(total_valid_time / num_correct)
+            else:
+                avg_valid_time = -1.0
 
-        if num_correct != iter_ind:
-            avg_invalid_time = my_trunc(total_invalid_time / (iter_ind - num_correct))
-        else:
-            avg_invalid_time = -1.0
+            if num_correct != iter_ind + 1:
+                avg_invalid_time = my_trunc(total_invalid_time / (iter_ind + 1 - num_correct))
+            else:
+                avg_invalid_time = -1.0
 
-        stats_str = f" gen time={avg_gen_time}, avg valid={avg_valid_time}, avg invalid={avg_invalid_time}, {num_correct}/{iter_ind+1}"
-        
-        if lines_up < 0:
-            lines_up = 1
-        for i in range(lines_up):
-            print(f"\033[A\r{' ' * window_width}\r", end='', flush=True)
+            # Output stats
+            stats_str = f" gen time={avg_gen_time}, avg valid={avg_valid_time}, avg invalid={avg_invalid_time}, {num_correct}/{iter_ind+1}"
+            
+            # Moves the cursor up and clears the lines above
+            for i in range(lines_up):
+                print(f"\033[A\r{' ' * window_width}\r", end='', flush=True)
+            
+            str_len = len(header_str) + len(stats_str)
+            lines_up = math.floor((str_len - 1) / window_width) + 1
 
-        str_len = len(header_str) + len(stats_str)
-        lines_up = math.floor((str_len - 1) / window_width) + 1
-
-        #print(f"\r{' ' * window_width}\r", end='')
-        print(header_str + stats_str)
-        for char in progress_bar:
-            print(char, end='')
-        #print(f'{window_width=}, {str_len=}, {lines_up=}', end='', flush=True)
-    print()
-    #print("====================================================\n")
+            print(header_str + stats_str)
+            for char in progress_bar:
+                print(char, end='')
+            print('', end='', flush=True)
+        print()
+    print("==============================================================\n")
 
 print("Successfully terminated")
 f.close()
