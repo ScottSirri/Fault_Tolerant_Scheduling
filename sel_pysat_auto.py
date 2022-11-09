@@ -315,21 +315,21 @@ def my_trunc(num):
     num /= 1000
     return num
 
-cd_vals = [[2,3], [2,2], [2,1], [1,2], [1,1]]
+cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4]]
 for pair in cd_vals:
     c, d = pair[0], pair[1]
-    for n in range(10,101,10): # Cycling through n values
+    for n in range(100,501,100): # Cycling through n values
         if c == 2 and d == 3:
             n = 100
         k_0 = math.ceil(math.sqrt(n))
         r_0 = math.ceil(k_0/2)
 
-        total_valid_time, total_invalid_time = 0, 0
+        params_valid_time, params_invalid_time = 0, 0
         solve_timer = My_Timer()
-        total_gen_time = 0
+        params_gen_time = 0
         gen_timer = My_Timer()
         num_correct = 0
-        num_iters = 10
+        num_iters = 5
         logging_str = ''
         if not logging_data:
             logging_str = '[NOT LOGGING] '
@@ -347,11 +347,12 @@ for pair in cd_vals:
             sub_index_invalid = False
             k = k_0
 
+            iter_gen_time, iter_solve_time = 0, 0
 
             while k > 1: # Logarithmically iterate over the SAME selector to check reducibility
 
                 # Parameters for this iteration of reducibility check
-                k = math.ceil(k / (2**reduc_index))
+                k = k_0 if reduc_index == 0 else math.ceil(k / (2**reduc_index))
                 r = math.ceil(k / 2)
 
                 # Initialize model
@@ -363,8 +364,7 @@ for pair in cd_vals:
                 selection_constraints(sel, k, r, model, formula)
                 card_constraints(sel, k, r, model, formula)
                 gen_timer.stop_timer()
-                gen_time = gen_timer.get_time()
-                total_gen_time += gen_time
+                iter_gen_time += gen_timer.get_time()
 
                 #Solve model
                 solve_timer.start_timer()
@@ -376,17 +376,14 @@ for pair in cd_vals:
                     clean_up()
                     sys.exit(0)
                 solve_timer.stop_timer()
-                solve_time = solve_timer.get_time()
-                
+                iter_solve_time += solve_timer.get_time()
 
                 if sat: # Only when invalid selector
-                    total_invalid_time += solve_time
-                    if logging_data:
-                        data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'N', len(sel.family)]
-                        writer.writerow(data_row)
                     valid = False
-                    if reduc_index > 1:
+
+                    if reduc_index > 1: # Unlikely for top selector to be valid and sub-selector to not be
                         sub_index_invalid = True
+
                     if DEBUG_INVALID == True: # Dump details of the invalid selector
                         model = model.get_model()
                         k_subset = []
@@ -400,39 +397,45 @@ for pair in cd_vals:
                         input()
                     break
                 else: # Valid selector
-                    total_valid_time += solve_time
-                    if logging_data:
-                        data_row = [c, d, n, k_0, r_0, gen_time, solve_time, 'Y', len(sel.family)]
-                        writer.writerow(data_row)
                     model.delete()
 
                 reduc_index += 1 # Loop variable
+            # === Outside the logarithmic while loop over k ===
 
-            # Outside the logarithmic while loop over k
-            if not valid:
+            if logging_data: # Write data to file
+                valid_char = 'Y' if valid else 'N'
+                data_row = [c, d, n, k_0, r_0, iter_gen_time, iter_solve_time, valid_char, len(sel.family)]
+                #data_row = [iter_gen_time]
+                writer.writerow(data_row)
+
+            # Update time + validity counts for this set of parameters
+            params_gen_time += iter_gen_time
+            if valid:
+                params_valid_time   += iter_solve_time
+                progress_bar.append('+')
+                num_correct += 1
+            else:
+                params_invalid_time += iter_solve_time
                 if sub_index_invalid:
                     progress_bar.append('!')
                 else:
                     progress_bar.append('-')
-            else:
-                progress_bar.append('+')
-                num_correct += 1
 
-            # Normalize times
-            avg_gen_time = my_trunc(total_gen_time / (iter_ind+1))
+            # (Temporary) normalized time variables for display purposes
+            avg_params_gen_time = my_trunc(params_gen_time / (iter_ind+1))
 
             if num_correct != 0:
-                avg_valid_time = my_trunc(total_valid_time / num_correct)
+                avg_params_valid_time = my_trunc(params_valid_time / num_correct)
             else:
-                avg_valid_time = -1.0
+                avg_params_valid_time = -1.0
 
             if num_correct != iter_ind + 1:
-                avg_invalid_time = my_trunc(total_invalid_time / (iter_ind + 1 - num_correct))
+                avg_params_invalid_time = my_trunc(params_invalid_time / (iter_ind + 1 - num_correct))
             else:
-                avg_invalid_time = -1.0
+                avg_params_invalid_time = -1.0
 
             # Output stats
-            stats_str = f" gen time={avg_gen_time}, avg valid={avg_valid_time}, avg invalid={avg_invalid_time}, {num_correct}/{iter_ind+1}"
+            stats_str = f" gen time={avg_params_gen_time}, avg valid={avg_params_valid_time}, avg invalid={avg_params_invalid_time}, {num_correct}/{iter_ind+1}"
             
             # Moves the cursor up and clears the lines above
             for i in range(lines_up):
