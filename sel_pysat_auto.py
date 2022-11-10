@@ -14,12 +14,64 @@ DEBUG_INVALID = False
 
 program_start_time = time.time()
 
+# Utility class for timing code execution
+class My_Timer:
+    def __init__(self):
+        self.start_time = -1
+        self.end_time = -1
+
+    # Start the timer
+    def start_timer(self):
+        if self.start_time <= 0:
+            self.start_time = time.time()
+        else:
+            print("start_timer error")
+
+    # Stop the timer
+    def stop_timer(self):
+        if self.end_time <= 0 and self.start_time > 0:
+            self.end_time = time.time()
+        else:
+            print("stop_timer error")
+
+    # Print the timer duration and reset it
+    def print_timer(self):
+        if self.start_time <= 0 or self.end_time <= self.start_time:
+            print("print_timer error")
+            return
+        elapsed = self.end_time - self.start_time
+        print("Time elapsed: %.3f" % elapsed)
+        self.start_time = -1
+        self.end_time = -1
+        return elapsed
+    
+    # Get the timer duration and reset it
+    def get_time(self):
+        if self.start_time <= 0 or self.end_time <= self.start_time:
+            print("get_time error")
+            return
+        elapsed = self.end_time - self.start_time
+        self.start_time = -1
+        self.end_time = -1
+        return elapsed
+
+    def reset(self):
+        self.start_time = -1
+        self.end_time = -1
+
+    # Get the timer duration
+    def get_time_no_reset(self):
+        if self.start_time <= 0 or self.end_time <= self.start_time:
+            print("get_time error")
+            return
+        elapsed = self.end_time - self.start_time
+        return elapsed
+
 window_width = os.get_terminal_size().columns
 resize_msg = "DO NOT RESIZE WINDOW DURING PROGRAM EXECUTION"
 if window_width > 45:
     print(f"{' ' * (math.floor((window_width - len(resize_msg)) / 2))}", end='', flush=True)
 print(resize_msg)
-
 
 def resizeHandler(signum, frame):
     window_width = os.get_terminal_size().columns
@@ -83,46 +135,6 @@ def generate_primes(lower, num_primes):
 class InputError(Exception):
     pass
 
-# Utility class for timing code execution
-class My_Timer:
-    def __init__(self):
-        self.start_time = -1
-        self.end_time = -1
-
-    # Start the timer
-    def start_timer(self):
-        if self.start_time <= 0:
-            self.start_time = time.time()
-        else:
-            print("start_timer error")
-
-    # Stop the timer
-    def stop_timer(self):
-        if self.end_time <= 0 and self.start_time > 0:
-            self.end_time = time.time()
-        else:
-            print("stop_timer error")
-
-    # Print the timer duration and reset it
-    def print_timer(self):
-        if self.start_time <= 0 or self.end_time <= self.start_time:
-            print("print_timer error")
-            return
-        elapsed = self.end_time - self.start_time
-        print("Time elapsed: %.3f" % elapsed)
-        self.start_time = -1
-        self.end_time = -1
-        return elapsed
-    
-    # Get the timer duration and reset it
-    def get_time(self):
-        if self.start_time <= 0 or self.end_time <= self.start_time:
-            print("get_time error")
-            return
-        elapsed = self.end_time - self.start_time
-        self.start_time = -1
-        self.end_time = -1
-        return elapsed
 
 class Selector:
     family = []
@@ -315,17 +327,16 @@ def my_trunc(num):
     num /= 1000
     return num
 
-cd_vals = [[3,2], [1,2]]
+cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4]]
+n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
 for pair in cd_vals:
     c, d = pair[0], pair[1]
-    for n in range(10,101,10): # Cycling through n values
+    for n in n_vals: # Cycling through n values
         k_0 = math.ceil(math.sqrt(n))
         r_0 = math.ceil(k_0/2)
 
         params_valid_time, params_invalid_time = 0, 0
-        solve_timer = My_Timer()
         params_gen_time = 0
-        gen_timer = My_Timer()
         num_correct = 0
         num_iters = 20
         logging_str = ''
@@ -348,6 +359,9 @@ for pair in cd_vals:
             iter_gen_time, iter_solve_time = 0, 0
 
             while k > 1: # Logarithmically iterate over the SAME selector to check reducibility
+
+                gen_timer = My_Timer()
+                solve_timer = My_Timer()
 
                 # Parameters for this iteration of reducibility check
                 k = k_0 if reduc_index == 0 else math.ceil(k / (2**reduc_index))
@@ -400,10 +414,10 @@ for pair in cd_vals:
                 reduc_index += 1 # Loop variable
             # === Outside the logarithmic while loop over k ===
 
+
             if logging_data: # Write data to file
                 valid_char = 'Y' if valid else 'N'
                 data_row = [c, d, n, k_0, r_0, iter_gen_time, iter_solve_time, valid_char, len(sel.family)]
-                #data_row = [iter_gen_time]
                 writer.writerow(data_row)
 
             # Update time + validity counts for this set of parameters
