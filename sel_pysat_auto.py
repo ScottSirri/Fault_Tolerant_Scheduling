@@ -327,11 +327,13 @@ def my_trunc(num):
     num /= 1000
     return num
 
-cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4]]
-n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
+cd_vals = [[3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
+n_vals = [10,20,30,40,50,60,70,80,90,100]
 for pair in cd_vals:
     c, d = pair[0], pair[1]
     for n in n_vals: # Cycling through n values
+        if pair == [3,2] and n == 100:
+            continue
         k_0 = math.ceil(math.sqrt(n))
         r_0 = math.ceil(k_0/2)
 
