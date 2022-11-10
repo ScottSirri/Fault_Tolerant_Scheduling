@@ -315,12 +315,10 @@ def my_trunc(num):
     num /= 1000
     return num
 
-cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4]]
+cd_vals = [[3,2], [1,2]]
 for pair in cd_vals:
     c, d = pair[0], pair[1]
-    for n in range(100,501,100): # Cycling through n values
-        if c == 2 and d == 3:
-            n = 100
+    for n in range(10,101,10): # Cycling through n values
         k_0 = math.ceil(math.sqrt(n))
         r_0 = math.ceil(k_0/2)
 
@@ -329,7 +327,7 @@ for pair in cd_vals:
         params_gen_time = 0
         gen_timer = My_Timer()
         num_correct = 0
-        num_iters = 5
+        num_iters = 20
         logging_str = ''
         if not logging_data:
             logging_str = '[NOT LOGGING] '
