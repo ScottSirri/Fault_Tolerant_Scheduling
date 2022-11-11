@@ -23,14 +23,14 @@ class My_Timer:
     # Start the timer
     def start_timer(self):
         if self.start_time <= 0:
-            self.start_time = time.time()
+            self.start_time = time.process_time()
         else:
             print("start_timer error")
 
     # Stop the timer
     def stop_timer(self):
         if self.end_time <= 0 and self.start_time > 0:
-            self.end_time = time.time()
+            self.end_time = time.process_time()
         else:
             print("stop_timer error")
 
@@ -198,10 +198,10 @@ class Selector:
         if (self.n <= 0 or self.k <= 0 or self.r <= 0 or self.k > self.n
                 or self.r > self.k or self.c <= 0 or self.d <= 0):
             return INVALID
-        for set in self.family:
-            if type(set) is not list:
+        for sel_set in self.family:
+            if type(sel_set) is not list:
                 return INVALID
-            for i in set:
+            for i in sel_set:
                 if i < 1 or i > self.n:  # Elements are in [1,n]
                     return INVALID
         return VALID
@@ -327,20 +327,21 @@ def my_trunc(num):
     num /= 1000
     return num
 
-cd_vals = [[3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
-n_vals = [10,20,30,40,50,60,70,80,90,100]
-for pair in cd_vals:
-    c, d = pair[0], pair[1]
-    for n in n_vals: # Cycling through n values
-        if pair == [3,2] and n == 100:
-            continue
+cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
+n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
+
+for pair in cd_vals[:6]:
+    for n in n_vals[10:]: # Cycling through n values
+
+        c, d = pair[0], pair[1]
         k_0 = math.ceil(math.sqrt(n))
         r_0 = math.ceil(k_0/2)
 
         params_valid_time, params_invalid_time = 0, 0
         params_gen_time = 0
         num_correct = 0
-        num_iters = 20
+        num_iters = 40
+
         logging_str = ''
         if not logging_data:
             logging_str = '[NOT LOGGING] '
@@ -348,6 +349,7 @@ for pair in cd_vals:
         lines_up = math.floor((len(header_str) - 1) / window_width) + 1
         print(header_str)
         progress_bar = []
+
         for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
 
             sel_tuple = prep_sel(n, k_0, r_0, c, d)
