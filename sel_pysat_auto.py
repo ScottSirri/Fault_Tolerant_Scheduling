@@ -329,9 +329,13 @@ def my_trunc(num):
 
 cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
 n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
+#end_n_ind = len(n_vals)
 
-for pair in cd_vals[:6]:
-    for n in n_vals[10:]: # Cycling through n values
+for n in n_vals[:10]: # Cycling through n values
+    #if pair[0] == 4 and pair[1] == 4:
+    #    end_n_ind = 10 # Only [10,100] starting at [c,d]=[4,4] and on
+
+    for pair in cd_vals[5:]:
 
         c, d = pair[0], pair[1]
         k_0 = math.ceil(math.sqrt(n))
@@ -340,7 +344,7 @@ for pair in cd_vals[:6]:
         params_valid_time, params_invalid_time = 0, 0
         params_gen_time = 0
         num_correct = 0
-        num_iters = 40
+        num_iters = 20
 
         logging_str = ''
         if not logging_data:
@@ -362,13 +366,25 @@ for pair in cd_vals[:6]:
 
             iter_gen_time, iter_solve_time = 0, 0
 
-            while k > 1: # Logarithmically iterate over the SAME selector to check reducibility
+            k_vals = []
+            k_ind = 1
+            EPS = .001
+            while (new_k_val := math.ceil(k/2 + k/(2*k_ind) - EPS)) > math.ceil(k/2) + 1:
+                if len(k_vals) == 0 or (len(k_vals) > 0 and new_k_val != k_vals[len(k_vals) - 1]):
+                    k_vals.append(new_k_val)
+                k_ind += 1
+            k_vals.append(math.ceil(k/2 - EPS))
+            
+            #print("k_vals: ", end='')
+            #print(k_vals)
+            #print()
+
+            for k in k_vals: # Logarithmically iterate over the SAME selector to check reducibility
 
                 gen_timer = My_Timer()
                 solve_timer = My_Timer()
 
-                # Parameters for this iteration of reducibility check
-                k = k_0 if reduc_index == 0 else math.ceil(k / (2**reduc_index))
+                # Parameter for this iteration of reducibility check
                 r = math.ceil(k / 2)
 
                 # Initialize model
