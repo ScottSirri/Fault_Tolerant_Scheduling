@@ -150,6 +150,8 @@ class Selector:
     def populate(self):
         num_collections = math.ceil(self.d * math.log(self.n))
         collection_size = math.ceil(self.c * self.k)
+        print("num cols:  math.ceil(%d * %f)" % (self.d, math.log(self.n)))
+        print("col size:  math.ceil(%d * %f)" % (self.c, self.k))
         sel_family_size = num_collections * collection_size
 
         self.family = []
@@ -331,11 +333,11 @@ cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2
 n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
 #end_n_ind = len(n_vals)
 
-for n in n_vals[:10]: # Cycling through n values
+for n in n_vals[len(n_vals)-1:]: # Cycling through n values
     #if pair[0] == 4 and pair[1] == 4:
     #    end_n_ind = 10 # Only [10,100] starting at [c,d]=[4,4] and on
 
-    for pair in cd_vals[5:]:
+    for pair in cd_vals[:1]:
 
         c, d = pair[0], pair[1]
         k_0 = math.ceil(math.sqrt(n))
@@ -358,6 +360,7 @@ for n in n_vals[:10]: # Cycling through n values
 
             sel_tuple = prep_sel(n, k_0, r_0, c, d)
             sel = sel_tuple[0]
+            print("len: " + str(len(sel.family)) + " # cols: " + str(sel_tuple[1]) + " col size: " + str(sel_tuple[2]))
             
             reduc_index = 0
             valid = True
