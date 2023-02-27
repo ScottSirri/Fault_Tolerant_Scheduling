@@ -1,6 +1,102 @@
 from pysat.solvers import Glucose3, Cadical
 from pysat.card import *
-import math, random
+import math, random, time
+import sys, os
+import csv, signal
+from datetime import datetime
+
+VALID = 0
+INVALID = -1
+
+NOT = -1
+
+program_start_time = time.time()
+
+# Utility class for timing code execution
+class My_Timer:
+    def __init__(self):
+        self.start_time = -1
+        self.end_time = -1
+
+    # Start the timer
+    def start_timer(self):
+        if self.start_time <= 0:
+            self.start_time = time.process_time()
+        else:
+            print("start_timer error")
+
+    # Stop the timer
+    def stop_timer(self):
+        if self.end_time <= 0 and self.start_time > 0:
+            self.end_time = time.process_time()
+        else:
+            print("stop_timer error")
+
+    # Print the timer duration and reset it
+    def print_timer(self):
+        if self.start_time <= 0 or self.end_time <= self.start_time:
+            print("print_timer error")
+            return
+        elapsed = self.end_time - self.start_time
+        print("Time elapsed: %.3f" % elapsed)
+        self.start_time = -1
+        self.end_time = -1
+        return elapsed
+    
+    # Get the timer duration and reset it
+    def get_time(self):
+        if self.start_time <= 0 or self.end_time <= self.start_time:
+            print("get_time error")
+            return
+        elapsed = self.end_time - self.start_time
+        self.start_time = -1
+        self.end_time = -1
+        return elapsed
+
+    def reset(self):
+        self.start_time = -1
+        self.end_time = -1
+
+    # Get the timer duration
+    def get_time_no_reset(self):
+        if self.start_time <= 0 or self.end_time <= self.start_time:
+            print("get_time error")
+            return
+        elapsed = self.end_time - self.start_time
+        return elapsed
+
+# Start logging data if indicated on command line
+logging_data = False
+
+if len(sys.argv) > 1:
+    if sys.argv[1] == 'log':
+        logging_data = True
+
+if logging_data:
+    now = datetime.now()
+    date_time_str = now.strftime("%Y_%m_%d-%H_%M_%S")
+    filename = './data/sched_' + date_time_str
+
+    f = open(filename, 'w')
+    writer = csv.writer(f)
+    header = ['c', 'd', 'n', 'f', 'time', 'sched_len']
+    writer.writerow(header)
+
+# Closes data file and prints time elapsed
+def clean_up():
+    if logging_data:
+        f.close()
+        print('closed file')
+    else:
+        print('not logging data, no file to close')
+    print('elapsed real time: ' + str(time.time() - program_start_time))
+
+# Handles CTRL + C terminating execution
+def signal_handler(sig, frame):
+    print('\n\n\nYou pressed Ctrl+C')
+    clean_up()
+    sys.exit(0)
+signal.signal(signal.SIGINT, signal_handler)
 
 class Schedule:
     def __init__(self, n_in, f_in, c_in, d_in):
@@ -19,12 +115,13 @@ class Schedule:
         # Phase i
         for i in range(ceil(math.log(self.f, 2) + 1)):
             
-            num_mappings = ceil(2 * (1 + 2**(i+1)))
-            valid = false
+            num_mappings = ceil(2 * (1 + 2**(i+1))) # \alpha = 1/2
+            valid = False
 
-            while not valid:
-                mapping = self.generate_mapping(self.f / (2**i))
-                if self.is_valid(mapping):
+            while not valid: # Generate until valid mapping obtained
+                m = self.f / (2**i)
+                mapping = self.generate_mapping(m)
+                if self.is_valid(mapping, m):
                     valid = True
 
             self.concatenate(mapping, num_mappings)
@@ -73,7 +170,8 @@ class Schedule:
                     solver.add_clause(clause_v_i)
                     formula.append(clause_v_i)
 
-    def card_constraints(sel_in, k, r, solver, formula):
+    # TODO : Update to mapping
+    def card_constraints(mapping, m, solver, formula):
         # \sum x_{v} = k
         xv_k = CardEnc.equals(lits=list(range(n+1, 2*n+1)), 
                   bound=k, top_id = 2*n + 1, encoding=EncType.mtotalizer)
@@ -93,21 +191,25 @@ class Schedule:
             formula.append(clause)
 
 
-    def is_valid(self, mapping):
+    def is_valid(self, mapping, m):
 
-        k_vals = []
-        k_ind = 1
-        EPS = .001
+        timer = My_Timer()
+        timer.start_timer()
 
-        while (new_k_val := math.ceil(k/2 + k/(2*k_ind) - EPS)) > math.ceil(k/2) + 1:
-            if len(k_vals) == 0 or (len(k_vals) > 0 and new_k_val != k_vals[len(k_vals) - 1]):
-                k_vals.append(new_k_val)
-            k_ind += 1
+        good_vals = []
+        ind = 1
+        EPS = .0001
+
+        new_good_val = math.ceil( m/2 + m/(2*ind) - EPS )
+        while new_good_val > math.ceil(m/2) + 1:
+            if len(good_vals) == 0 or new_good_val != good_vals[len(good_vals) - 1]:
+                good_vals.append(new_k_val)
+            ind += 1
+            new_good_val = math.ceil(m/2 + m/(2*ind) - EPS)
+        good_vals.append(ceil(m/2) + 1)
         
         # Logarithmically iterate over SAME selector to check reducibility
-        for k in k_vals:                 
-            gen_timer = My_Timer()
-            solve_timer = My_Timer()
+        for good_val in good_vals:                 
 
             # Parameter for this iteration of reducibility check
             r = math.ceil(k / 2)
@@ -117,16 +219,21 @@ class Schedule:
             formula = [] # Not integral to calculation, just for display
 
             # Add constraints to model
-            gen_timer.start_timer()
-            selection_constraints(sel, k, r, model, formula)
+            selection_constraints(mapping, model, formula)
             card_constraints(sel, k, r, model, formula)
-            gen_timer.stop_timer()
-            iter_gen_time += gen_timer.get_time()
 
             #Solve model
-            solve_timer.start_timer()
             try:
                 sat = model.solve()
             except Exception as err:
                 print("\n\n\nException occurred during the pysat solver's operation")
                 print(f"Unexpected {err=}, {type(err)=}")
+
+            if sat: # Invalid mapping
+                timer.stop_timer()
+                return (False, timer.get_time())
+            else:   # Valid mapping
+                model.delete()
+
+        timer.stop_timer()
+        return (True, timer.get_time())
