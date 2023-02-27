@@ -105,7 +105,9 @@ class Schedule:
         self.c = c_in
         self.d = d_in
         self.schedule = []
+        self.length = 0
 
+    # Generates the entire reducible 1/2-good schedule
     def generate_schedule(self):
 
         # Identity mapping
@@ -121,11 +123,13 @@ class Schedule:
             while not valid: # Generate until valid mapping obtained
                 m = self.f / (2**i)
                 mapping = self.generate_mapping(m)
-                if self.is_valid(mapping, m):
+                if self.is_valid(mapping, m)[0]:
                     valid = True
 
             self.concatenate(mapping, num_mappings)
+        self.length = len(self.schedule)
 
+    # Generates the smaller 1/2-good mappings
     def generate_mapping(self, m):
         num_collections = ceil(self.d * math.log(self.n))
         collection_size = ceil(self.c * m)
@@ -149,11 +153,40 @@ class Schedule:
 
         return mapping
 
+    """
+                [1,n]: z_{v}
+             [n+1,2n]: x_{v}
+             [2n+1,\infty): AUX
+
+    var_data is a tuple with first entry one of 'z', 'x'.
+    The next entry is the node it corresponds to.
+    Returns the integer mapped to that.
+    """
+    def get_var_num(var_data):
+        if var_data[0] == "z":
+            return var_data[1]
+        elif var_data[0] == "x":
+            return n + var_data[1]
+        else:
+            return "INVALID"
+    def get_var_name(var_num):
+        # Negation
+        if var_num < 0:
+            var_num *= -1
+
+        if 1 <= var_num and var_num <= n:
+            return ["z", var_num]
+        elif n+1 <= var_num and var_num <= 2*n:
+            return ["x", var_num - n]
+        elif 2*n+1 <= var_num:
+            return ["AUX", var_num]
+        else:
+            return "INVALID"
 
     def selection_constraints(mapping, solver, formula):
 
         for v in range(1, n+1):
-            zv,xv = get_var_num(["z", v]), get_var_num(["x", v])
+            zv,xv = self.get_var_num(("z",v)), self.get_var_num(("x",v))
 
             for i in range(len(mapping)):
                 v_in_slot_i = False
@@ -161,7 +194,7 @@ class Schedule:
                 clause_v_i = [zv, NOT * xv] # Left out the NOT * v_in_slot_i
                 for x_num_raw in mapping[i]:
                     if x_num_raw != v:
-                        x_not_v = get_var_num(["x", x_num_raw])
+                        x_not_v = self.get_var_num(["x", x_num_raw])
                         clause_v_i.append(x_not_v)
                     else:
                         v_in_slot_i = True
@@ -170,27 +203,26 @@ class Schedule:
                     solver.add_clause(clause_v_i)
                     formula.append(clause_v_i)
 
-    # TODO : Update to mapping
     def card_constraints(mapping, m, solver, formula):
-        # \sum x_{v} = k
-        xv_k = CardEnc.equals(lits=list(range(n+1, 2*n+1)), 
-                  bound=k, top_id = 2*n + 1, encoding=EncType.mtotalizer)
+        # \sum x_{v} = m
+        xv_m = CardEnc.equals(lits=list(range(self.n+1, 2*self.n+1)), 
+                  bound=m, top_id = 2*self.n + 1, encoding=EncType.mtotalizer)
         greatest_id = -1
-        for clause in xv_k:
+        for clause in xv_m:
             solver.add_clause(clause)
             formula.append(clause)
             for num in clause:
                 if abs(num) > greatest_id:
                     greatest_id = abs(num)
 
-        # \sum z_{v} < r
-        zv_r = CardEnc.atmost(lits=list(range(1, n+1)), 
-                  bound=r-1, top_id = greatest_id + 1, encoding=EncType.mtotalizer)
-        for clause in zv_r:
+        # \sum z_{v} < ceil(m/2)
+        zv_m2 = CardEnc.atmost(lits=list(range(1, self.n+1)), 
+                  bound=ceil(m/2)-1, top_id = greatest_id + 1, encoding=EncType.mtotalizer)
+        for clause in zv_m2:
             solver.add_clause(clause)
             formula.append(clause)
 
-
+    # Returns whether the passed mapping is 1/2-good for subset size m
     def is_valid(self, mapping, m):
 
         timer = My_Timer()
@@ -208,11 +240,8 @@ class Schedule:
             new_good_val = math.ceil(m/2 + m/(2*ind) - EPS)
         good_vals.append(ceil(m/2) + 1)
         
-        # Logarithmically iterate over SAME selector to check reducibility
+        # Logarithmically iterate over same mapping checking *reducible* 1/2-goodness
         for good_val in good_vals:                 
-
-            # Parameter for this iteration of reducibility check
-            r = math.ceil(k / 2)
 
             # Initialize model
             model = Cadical(use_timer = True)
@@ -220,9 +249,9 @@ class Schedule:
 
             # Add constraints to model
             selection_constraints(mapping, model, formula)
-            card_constraints(sel, k, r, model, formula)
+            card_constraints(mapping, good_val, model, formula)
 
-            #Solve model
+            # Solve model (determine is this mapping 1/2-good for subset size good_val)
             try:
                 sat = model.solve()
             except Exception as err:
@@ -237,3 +266,9 @@ class Schedule:
 
         timer.stop_timer()
         return (True, timer.get_time())
+
+
+mapping = Schedule(100, 10, 4, 4)
+mapping.generate_schedule()
+print(mapping.length)
+print(mapping.schedule)
