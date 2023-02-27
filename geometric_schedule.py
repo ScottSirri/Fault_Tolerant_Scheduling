@@ -129,10 +129,14 @@ class Schedule:
             while not valid: # Generate until valid mapping obtained
                 m = self.f / (2**i)
                 mapping = self.generate_mapping(m)
-                if self.is_valid(mapping, m)[0]:
+
+                data = self.is_valid(mapping, m)
+
+                if data[0] == True:
                     valid = True
+                    print(f"phase {i}, m = {m}, validation time {data[1]}")
                 else:
-                    print(f"Got an invalid mapping for phase {i}, m = {m}")
+                    print(f"Got an invalid mapping for phase {i}, m = {m}, invalidation time {data[1]}")
 
             self.concatenate(mapping, num_mappings)
             if PHASE_DELIMITERS:
@@ -255,6 +259,7 @@ class Schedule:
             ind += 1
             new_good_val = ceil(m/2 + m/(2*ind) - EPS)
         good_vals.append(ceil(m/2) + 1)
+        print("Mapping 1/2-good for ", good_vals)
         
         # Logarithmically iterate over same mapping checking *reducible* 1/2-goodness
         for good_val in good_vals:                 
@@ -289,7 +294,7 @@ class Schedule:
 
 
 
-mapping = Schedule(50, 6, 3, 3)
+mapping = Schedule(100, 10, 2, 2)
 mapping.generate_schedule()
 print(mapping.length)
 mapping.print()
