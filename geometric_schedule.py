@@ -11,7 +11,8 @@ INVALID = -1
 
 NOT = -1
 
-PHASE_DELIMITERS = True
+PHASE_DELIMITERS = False
+DEBUG_PRINT = True
 
 program_start_time = time.time()
 
@@ -71,18 +72,21 @@ class My_Timer:
 # Start logging data if indicated on command line
 logging_data = False
 
-if len(sys.argv) > 1:
-    if sys.argv[1] == 'log':
+param_n = int(sys.argv[1])
+param_f = int(sys.argv[2])
+
+if len(sys.argv) == 4:
+    if sys.argv[3] == 'log':
         logging_data = True
 
 if logging_data:
     now = datetime.now()
     date_time_str = now.strftime("%Y_%m_%d-%H_%M_%S")
-    filename = './data/sched_' + date_time_str
+    filename = './sched_data/' + date_time_str
 
     f = open(filename, 'w')
     writer = csv.writer(f)
-    header = ['c', 'd', 'n', 'f', 'time', 'sched_len']
+    header = ['n', 'f', 'c', 'd', 'time', 'sched_len']
     writer.writerow(header)
 
 # Closes data file and prints time elapsed
@@ -113,6 +117,14 @@ class Schedule:
     # Generates the entire reducible 1/2-good schedule
     def generate_schedule(self):
 
+        self.schedule.clear()
+        self.length = 0
+
+        mapping_timer = My_Timer()
+
+        sched_timer = My_Timer()
+        sched_timer.start_timer()
+
         # Identity mapping
         for i in range(self.n):
             self.schedule.append([i+1])
@@ -126,22 +138,43 @@ class Schedule:
             num_mappings = ceil(2 * (1 + 2**(i+1))) # \alpha = 1/2
             valid = False
 
+            mapping_timer.start_timer()
+
+            num_attempts = 0
             while not valid: # Generate until valid mapping obtained
+
                 m = self.f / (2**i)
+
+                if DEBUG_PRINT:
+                    print(f"{num_attempts} failed")
+
                 mapping = self.generate_mapping(m)
+                valid = self.is_valid(mapping, m)
 
-                data = self.is_valid(mapping, m)
-
-                if data[0] == True:
-                    valid = True
-                    print(f"phase {i}, m = {m}, validation time {data[1]}")
-                else:
-                    print(f"Got an invalid mapping for phase {i}, m = {m}, invalidation time {data[1]}")
+                if valid:
+                    mapping_timer.stop_timer()
+                    if DEBUG_PRINT:
+                        print(f"phase {i}, m = {m}, valid mapping (time {mapping_timer.get_time()})")
+                num_attempts += 1
 
             self.concatenate(mapping, num_mappings)
+
             if PHASE_DELIMITERS:
                 self.schedule.append(["=" for i in range(25)])
+
+        # Full schedule has now been generated
         self.length = len(self.schedule)
+
+        sched_timer.stop_timer()
+        duration = sched_timer.get_time()
+
+        if DEBUG_PRINT:
+            print(f"n={self.n} f={self.f} c={self.c} d={self.d} time={duration} schedule_length={self.length}")
+        
+        if logging_data: # Write data to file
+            data_row = [self.n, self.f, self.c, self.d, duration, self.length]
+            writer.writerow(data_row)
+
 
     # Generates the smaller 1/2-good mappings
     def generate_mapping(self, m):
@@ -245,9 +278,6 @@ class Schedule:
     # Returns whether the passed mapping is 1/2-good for subset size m
     def is_valid(self, mapping, m):
 
-        timer = My_Timer()
-        timer.start_timer()
-
         good_vals = []
         ind = 1
         EPS = .0001
@@ -259,7 +289,9 @@ class Schedule:
             ind += 1
             new_good_val = ceil(m/2 + m/(2*ind) - EPS)
         good_vals.append(ceil(m/2) + 1)
-        print("Mapping 1/2-good for ", good_vals)
+
+        if DEBUG_PRINT:
+            print("Mapping 1/2-good for ", good_vals, end = ' ', flush = True)
         
         # Logarithmically iterate over same mapping checking *reducible* 1/2-goodness
         for good_val in good_vals:                 
@@ -280,13 +312,23 @@ class Schedule:
                 print(f"Unexpected {err=}, {type(err)=}")
 
             if sat: # Invalid mapping
-                timer.stop_timer()
-                return (False, timer.get_time())
+
+                if DEBUG_PRINT:
+                    print('\r', end = '')
+                    print(' '*100, end = '')
+                    print('\033[F', end = '', flush = True)
+
+                return False
             else:   # Valid mapping
                 model.delete()
 
-        timer.stop_timer()
-        return (True, timer.get_time())
+            if DEBUG_PRINT:
+                print(".", end = '', flush = True)
+
+        if DEBUG_PRINT:
+            print()
+
+        return True
 
     def print(self):
         for slot in self.schedule:
@@ -294,7 +336,7 @@ class Schedule:
 
 
 
-mapping = Schedule(100, 10, 2, 2)
+mapping = Schedule(param_n, param_f, 2, 2)
 mapping.generate_schedule()
 print(mapping.length)
 mapping.print()
