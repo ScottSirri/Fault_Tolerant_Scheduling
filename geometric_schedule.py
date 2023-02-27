@@ -72,12 +72,18 @@ class My_Timer:
 # Start logging data if indicated on command line
 logging_data = False
 
-param_n = int(sys.argv[1])
-param_f = int(sys.argv[2])
+if len(sys.argv >= 3):
+    param_n = int(sys.argv[1])
+    param_f = int(sys.argv[2])
 
-if len(sys.argv) == 4:
-    if sys.argv[3] == 'log':
+    if len(sys.argv) == 4:
+        if sys.argv[3] == 'log':
+            logging_data = True
+
+if len(sys.argv == 2):
+    if sys.argv[1] == 'log':
         logging_data = True
+
 
 if logging_data:
     now = datetime.now()
@@ -336,7 +342,20 @@ class Schedule:
 
 
 
+cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2]]
+n_vals = [50,100,200,300,400,500]
+
+for n_val in n_vals:
+    for pair in cd_vals:
+        c, d = pair[0], pair[1]
+
+        mapping = Schedule(n_val, ceil(sqrt(n_val)), c, d)
+        mapping.generate_schedule()
+        print(mapping.length)
+
+"""
 mapping = Schedule(param_n, param_f, 2, 2)
 mapping.generate_schedule()
 print(mapping.length)
 mapping.print()
+"""
