@@ -150,8 +150,8 @@ class Selector:
     def populate(self):
         num_collections = math.ceil(self.d * math.log(self.n))
         collection_size = math.ceil(self.c * self.k)
-        print("num cols:  math.ceil(%d * %f)" % (self.d, math.log(self.n)))
-        print("col size:  math.ceil(%d * %f)" % (self.c, self.k))
+        #print("num cols:  math.ceil(%d * %f)" % (self.d, math.log(self.n)))
+        #print("col size:  math.ceil(%d * %f)" % (self.c, self.k))
         sel_family_size = num_collections * collection_size
 
         self.family = []
@@ -329,16 +329,22 @@ def my_trunc(num):
     num /= 1000
     return num
 
-cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
+cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2]]
+#cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
 n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
 #end_n_ind = len(n_vals)
 
-for n in n_vals[len(n_vals)-1:]: # Cycling through n values
-    #if pair[0] == 4 and pair[1] == 4:
-    #    end_n_ind = 10 # Only [10,100] starting at [c,d]=[4,4] and on
+for n in n_vals[11:]: # Cycling through n values
+    """
+    if n >= 200:
+        last_cd_ind = 5
+    else:
+        last_cd_ind = len(cd_vals)
+    for pair in cd_vals[:last_cd_ind]:
+    """
 
-    for pair in cd_vals[:1]:
 
+    for pair in cd_vals[:6]:
         c, d = pair[0], pair[1]
         k_0 = math.ceil(math.sqrt(n))
         r_0 = math.ceil(k_0/2)
@@ -346,7 +352,7 @@ for n in n_vals[len(n_vals)-1:]: # Cycling through n values
         params_valid_time, params_invalid_time = 0, 0
         params_gen_time = 0
         num_correct = 0
-        num_iters = 20
+        num_iters = 10
 
         logging_str = ''
         if not logging_data:
@@ -360,7 +366,6 @@ for n in n_vals[len(n_vals)-1:]: # Cycling through n values
 
             sel_tuple = prep_sel(n, k_0, r_0, c, d)
             sel = sel_tuple[0]
-            print("len: " + str(len(sel.family)) + " # cols: " + str(sel_tuple[1]) + " col size: " + str(sel_tuple[2]))
             
             reduc_index = 0
             valid = True
@@ -376,14 +381,10 @@ for n in n_vals[len(n_vals)-1:]: # Cycling through n values
                 if len(k_vals) == 0 or (len(k_vals) > 0 and new_k_val != k_vals[len(k_vals) - 1]):
                     k_vals.append(new_k_val)
                 k_ind += 1
-            k_vals.append(math.ceil(k/2 - EPS))
+            #k_vals.append(math.ceil(k/2 - EPS))  NOT SURE THIS SHOULD BE COMMENTED OUT
             
-            #print("k_vals: ", end='')
-            #print(k_vals)
-            #print()
-
-            for k in k_vals: # Logarithmically iterate over the SAME selector to check reducibility
-
+            # Logarithmically iterate over SAME selector to check reducibility
+            for k in k_vals:                 
                 gen_timer = My_Timer()
                 solve_timer = My_Timer()
 
@@ -437,7 +438,6 @@ for n in n_vals[len(n_vals)-1:]: # Cycling through n values
                 reduc_index += 1 # Loop variable
             # === Outside the logarithmic while loop over k ===
 
-
             if logging_data: # Write data to file
                 valid_char = 'Y' if valid else 'N'
                 data_row = [c, d, n, k_0, r_0, iter_gen_time, iter_solve_time, valid_char, len(sel.family)]
@@ -446,7 +446,7 @@ for n in n_vals[len(n_vals)-1:]: # Cycling through n values
             # Update time + validity counts for this set of parameters
             params_gen_time += iter_gen_time
             if valid:
-                params_valid_time   += iter_solve_time
+                params_valid_time += iter_solve_time
                 progress_bar.append('+')
                 num_correct += 1
             else:
