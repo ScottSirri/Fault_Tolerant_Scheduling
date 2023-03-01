@@ -1,7 +1,7 @@
 from pysat.solvers import Glucose3, Cadical
 from pysat.card import *
 import math, random, time
-from math import ceil, log
+from math import ceil, log, sqrt
 import sys, os
 import csv, signal
 from datetime import datetime
@@ -72,7 +72,7 @@ class My_Timer:
 # Start logging data if indicated on command line
 logging_data = False
 
-if len(sys.argv >= 3):
+if len(sys.argv) >= 3:
     param_n = int(sys.argv[1])
     param_f = int(sys.argv[2])
 
@@ -80,7 +80,7 @@ if len(sys.argv >= 3):
         if sys.argv[3] == 'log':
             logging_data = True
 
-if len(sys.argv == 2):
+if len(sys.argv) == 2:
     if sys.argv[1] == 'log':
         logging_data = True
 
@@ -160,7 +160,7 @@ class Schedule:
                 if valid:
                     mapping_timer.stop_timer()
                     if DEBUG_PRINT:
-                        print(f"phase {i}, m = {m}, valid mapping (time {mapping_timer.get_time()})")
+                        print(f"phase {i}, m = {m}, valid mapping (time {mapping_timer.get_time():.1f})")
                 num_attempts += 1
 
             self.concatenate(mapping, num_mappings)
@@ -175,7 +175,8 @@ class Schedule:
         duration = sched_timer.get_time()
 
         if DEBUG_PRINT:
-            print(f"n={self.n} f={self.f} c={self.c} d={self.d} time={duration} schedule_length={self.length}")
+            print(f"n={self.n} f={self.f} c={self.c} d={self.d} time={duration:.1f} schedule_length={self.length}")
+            print("\n")
         
         if logging_data: # Write data to file
             data_row = [self.n, self.f, self.c, self.d, duration, self.length]
@@ -351,7 +352,6 @@ for n_val in n_vals:
 
         mapping = Schedule(n_val, ceil(sqrt(n_val)), c, d)
         mapping.generate_schedule()
-        print(mapping.length)
 
 """
 mapping = Schedule(param_n, param_f, 2, 2)
