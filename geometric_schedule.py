@@ -152,7 +152,7 @@ class Schedule:
                 m = self.f / (2**i)
 
                 if DEBUG_PRINT:
-                    print(f"{num_attempts} failed")
+                    print(str(num_attempts) + " failed")
 
                 mapping = self.generate_mapping(m)
                 valid = self.is_valid(mapping, m)
@@ -160,7 +160,9 @@ class Schedule:
                 if valid:
                     mapping_timer.stop_timer()
                     if DEBUG_PRINT:
-                        print(f"phase {i}, m = {m}, valid mapping (time {mapping_timer.get_time():.1f})")
+                        print("phase " + str(i), end = '')
+                        print(", m = " + str(m), end = '')
+                        print(", valid mapping -- time " + str(mapping_timer.get_time()))
                 num_attempts += 1
 
             self.concatenate(mapping, num_mappings)
@@ -175,7 +177,12 @@ class Schedule:
         duration = sched_timer.get_time()
 
         if DEBUG_PRINT:
-            print(f"n={self.n} f={self.f} c={self.c} d={self.d} time={duration:.1f} schedule_length={self.length}")
+            print("n=" + str(self.n), end='')
+            print(" f=" + str(self.f), end='')
+            print(" c=" + str(self.c), end='')
+            print(" d=" + str(self.d), end='')
+            print(" schedule_length=" + str(self.length), end='')
+            print(" time=" + str(duration))
             print("\n")
         
         if logging_data: # Write data to file
@@ -316,7 +323,9 @@ class Schedule:
                 sat = model.solve()
             except Exception as err:
                 print("\n\n\nException occurred during the pysat solver's operation")
-                print(f"Unexpected {err=}, {type(err)=}")
+                clean_up()
+                sys.exit(0)
+                #print("Unexpected " + str(err=))
 
             if sat: # Invalid mapping
 
@@ -341,21 +350,29 @@ class Schedule:
         for slot in self.schedule:
             print(slot)
 
+#cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2]]
+cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4]]
+n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
+#f_funcs = [2,4,8,16,32,64,'quarter','half']
+f_funcs = ['sqrt']
 
+num_iters = 5
 
-cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2]]
-n_vals = [50,100,200,300,400,500]
+for f in f_funcs:
+    for i in range(num_iters):
+        for n_val in n_vals:
+            for pair in cd_vals:
+                c, d = pair[0], pair[1]
 
-for n_val in n_vals:
-    for pair in cd_vals:
-        c, d = pair[0], pair[1]
+                if f == 'quarter':
+                    f_in = ceil(n_val/4)
+                elif f == 'half':
+                    f_in = ceil(n_val/2)
+                elif f == 'sqrt':
+                    f_in = ceil(math.sqrt(n_val))
+                else:
+                    f_in = f
 
-        mapping = Schedule(n_val, ceil(sqrt(n_val)), c, d)
-        mapping.generate_schedule()
-
-"""
-mapping = Schedule(param_n, param_f, 2, 2)
-mapping.generate_schedule()
-print(mapping.length)
-mapping.print()
-"""
+                if f_in < n_val:
+                    mapping = Schedule(n_val, f_in, c, d)
+                    mapping.generate_schedule()
