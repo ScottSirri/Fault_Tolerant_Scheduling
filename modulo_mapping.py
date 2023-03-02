@@ -1,16 +1,10 @@
-from pysat.solvers import Glucose3, Cadical
-from pysat.card import *
-import math, random
-import sys, os, time
+import math, random, time
+from math import ceil, log, sqrt
+import sys, os
 import csv, signal
 from datetime import datetime
 
-VALID = 0
-INVALID = -1
-
-NOT = -1
-
-DEBUG_INVALID = False
+DEBUG_PRINT = True
 
 program_start_time = time.time()
 
@@ -67,51 +61,6 @@ class My_Timer:
         elapsed = self.end_time - self.start_time
         return elapsed
 
-window_width = os.get_terminal_size().columns
-resize_msg = "DO NOT RESIZE WINDOW DURING PROGRAM EXECUTION"
-if window_width > 45:
-    print(f"{' ' * (math.floor((window_width - len(resize_msg)) / 2))}", end='', flush=True)
-print(resize_msg)
-
-def resizeHandler(signum, frame):
-    window_width = os.get_terminal_size().columns
-    #print("resize-window signal caught")
-signal.signal(signal.SIGWINCH, resizeHandler)
-
-logging_data = False
-
-if len(sys.argv) > 1:
-    if sys.argv[1] == 'log':
-        logging_data = True
-
-if logging_data:
-    now = datetime.now()
-    date_time_str = now.strftime("%Y_%m_%d-%H_%M_%S")
-    filename = './data/' + date_time_str
-
-    f = open(filename, 'w')
-    writer = csv.writer(f)
-    header = ['c', 'd', 'n', 'k', 'r', 'gen_time', 'solve_time', 'valid', 'sel_len']
-    writer.writerow(header)
-
-def clean_up():
-    if logging_data:
-        f.close()
-        print('closed file')
-    else:
-        print('not logging data, no file to close')
-    print('elapsed real time: ' + str(time.time() - program_start_time))
-
-def signal_handler(sig, frame):
-    print('\n\n\nYou pressed Ctrl+C')
-    clean_up()
-    sys.exit(0)
-signal.signal(signal.SIGINT, signal_handler)
-
-def intersection(lst1, lst2):
-    lst3 = [value for value in lst1 if value in lst2]
-    return lst3
-
 def is_prime(num):
     if num < 2:
         return False
@@ -123,7 +72,7 @@ def is_prime(num):
 # Generate the first num_primes prime numbers >= lower
 def generate_primes(lower, num_primes):
     primes = []
-    i = lower
+    i = ceil(lower + .0001)
     if i % 2 == 0:
         i += 1
     while len(primes) < num_primes:
@@ -132,359 +81,121 @@ def generate_primes(lower, num_primes):
         i += 2
     return primes
 
-class InputError(Exception):
-    pass
+# Start logging data if indicated on command line
+logging_data = False
 
+if len(sys.argv) == 2:
+    if sys.argv[1] == 'log':
+        logging_data = True
 
-class Selector:
-    family = []
+if logging_data:
+    now = datetime.now()
+    date_time_str = now.strftime("%Y_%m_%d-%H_%M_%S")
+    filename = './sched_data/mod_' + date_time_str
 
-    def __init__(self, in_n, in_k, in_r, in_c, in_d):
-        self.n = in_n
-        self.k = in_k
-        self.r = in_r
-        self.c = in_c
-        self.d = in_d
+    f = open(filename, 'w')
+    writer = csv.writer(f)
+    header = ['n', 'f', 'time', 'sched_len']
+    writer.writerow(header)
 
-    # Populates the sets of the selector
-    def populate(self):
-        num_collections = math.ceil(self.d * math.log(self.n))
-        collection_size = math.ceil(self.c * self.k)
-        #print("num cols:  math.ceil(%d * %f)" % (self.d, math.log(self.n)))
-        #print("col size:  math.ceil(%d * %f)" % (self.c, self.k))
-        sel_family_size = num_collections * collection_size
+# Closes data file and prints time elapsed
+def clean_up():
+    if logging_data:
+        f.close()
+        print('closed file')
+    else:
+        print('not logging data, no file to close')
+    print('elapsed real time: ' + str(time.time() - program_start_time))
 
-        self.family = []
-        for i in range(num_collections):
-            collection = [] # List of lists, each of which is a selector set
-            for j in range(collection_size):
-                collection.append([])
-            for element in range(n):
-                index = math.floor(random.uniform(0, collection_size))
-                collection[index].append(element+1)
-            for sel_set in collection:
-                if len(sel_set) > 0: 
-                    self.family.append(sel_set)
-        return [num_collections, collection_size]
+# Handles CTRL + C terminating execution
+def signal_handler(sig, frame):
+    print('\n\n\nYou pressed Ctrl+C')
+    clean_up()
+    sys.exit(0)
+signal.signal(signal.SIGINT, signal_handler)
 
-    # Generates an invalid selector for testing purposes
-    def bad_populate(self):
-        num_collections = math.ceil(self.d * math.log(self.n))
-        collection_size = math.ceil(self.c * self.k)
-        sel_family_size = num_collections * collection_size
-        print(" ====== BEWARE! BAD SELECTOR POPULATION! ======")
+class Schedule:
+    def __init__(self, n_in, f_in):
+        self.n = n_in
+        self.f = f_in
+        self.schedule = []
+        self.length = 0
 
-        self.family = []
-        for i in range(self.k):
-            sel_set = [] # List of lists, each of which is a selector set
-            for element in range(n):
-                if random.random() < .1:
-                    sel_set.append(element+1)
-            if len(sel_set) > 0: 
-                self.family.append(sel_set)
+    # Generates the entire reducible 1/2-good schedule
+    def generate_schedule(self):
 
-    # Returns the number of sets that would be in a selector of these
-    # parameters produced by the modulo mapping method in Dr. Agrawal's paper.
-    def modulo_num_slots(self):
+        self.schedule.clear()
+        self.length = 0
+
+        sched_timer = My_Timer()
+        sched_timer.start_timer()
+
+        # Identity mapping
+        for i in range(self.n):
+            self.schedule.append([i+1])
+
         n = self.n
-        k = self.k
-        num_collections = k * math.ceil(math.log(n) / math.log(k * math.log(n)))
-        primes = generate_primes(num_collections, math.floor(k * math.log(n)) + 1)
-        num_slots = 0
-        for prime in primes:
-            num_slots += prime
-        return num_slots
+        f = self.f
+        C = f * ceil(log(n,2) / log(f * log(n,2),2))
+        #print(f"C={C}, f*log(n,2)={ceil(f*log(n,2)+.0001)}")
 
-    # Validates that selector parameters are sensical
-    def validate(self):
-        if (self.n <= 0 or self.k <= 0 or self.r <= 0 or self.k > self.n
-                or self.r > self.k or self.c <= 0 or self.d <= 0):
-            return INVALID
-        for sel_set in self.family:
-            if type(sel_set) is not list:
-                return INVALID
-            for i in sel_set:
-                if i < 1 or i > self.n:  # Elements are in [1,n]
-                    return INVALID
-        return VALID
+        # The first C prime numbers greater than f*log(n)
+        primes = generate_primes(f * log(n,2), C)
+        #print("primes: ", end='')
+        #print(primes)
 
-    # Prints the selector with stars denoting the "bottleneck" sets in which
-    # the minimal set of selected elements are selected
-    def print_sel(self, selected_list=None):
-        if selected_list == None:
-            selected_list = []
-        print(f"Candidate selector({self.n}, {self.k}, {self.r}):")
-        for sel_set in self.family:
-            print("\t", end='')
-            marker = "    " 
-            if len(intersection(sel_set, selected_list)) == 1:
-                   marker = "*** "
-            print(marker, end = '')
-            #print(sel_set)
-            for elem in sel_set:
-                print(f" .{elem}. ", end="")
-            print()
-        print()
+        # Phase i
+        for i in range(C):
 
+            for j in range(primes[i]):
+                slot = []
+                x = j
+                # Add all ints in msg_ind (mod primes[i])
+                while x < n:
+                    slot.append(x)
+                    x += primes[i]
+                self.schedule.append(slot)
 
-"""
-            [1,n]: z_{v}
-         [n+1,2n]: x_{v}
+        # Full schedule has now been generated
+        self.length = len(self.schedule)
+        #print("modulo length ", int(self.length))
+        #self.print_sched()
 
-var_data is a tuple with first entry one of 'z', 'x', 'y'
-The next one or two entries are the var numbers
-Returns the integer mapped to that.
-"""
-def get_var_num(var_data):
-    if var_data[0] == "z":
-        return var_data[1]
-    elif var_data[0] == "x":
-        return n + var_data[1]
-    else:
-        return "INVALID"
-def get_var_name(var_num):
-    # Negation
-    if var_num < 0:
-        var_num *= -1
+        sched_timer.stop_timer()
+        duration = sched_timer.get_time()
 
-    if 1 <= var_num and var_num <= n:
-        return ["z", var_num]
-    elif n+1 <= var_num and var_num <= 2*n:
-        return ["x", var_num - n]
-    elif 2*n+1 <= var_num:
-        return ["AUX", var_num]
-    else:
-        return "INVALID"
-def print_clauses(formula):
-    print("Clauses: ")
-    for clause in formula:
-        if type(clause) == str:
-            continue
-        for num in clause:
-            var_name = get_var_name(num)
-            num_str = ""
-            if var_name[0] != "AUX":
-                if num < 0:
-                    num_str = "!"
-                num_str = num_str + var_name[0]
-                if var_name[0] == 'y':
-                    num_str = num_str + str(var_name[1]) + "," + str(var_name[2])
-                else:
-                    num_str = num_str + str(var_name[1])
-            else:
-                num_str = var_name[0] + str(var_name[1])
-            print(f"{num_str}   ",end='')
-        print()
+        if DEBUG_PRINT:
+            print("n=" + str(self.n), end='')
+            print(" f=" + str(self.f), end='')
+            print(" schedule_length=" + str(self.length), end='')
+            print(" time=" + str(duration))
+            print("\n")
+        
+        if logging_data: # Write data to file
+            data_row = [self.n, self.f, duration, self.length]
+            writer.writerow(data_row)
 
-def prep_sel(n, k, r, c, d):
-    sel = Selector(n, k, r, c, d)
-    collection_data = sel.populate()
-    if sel.validate() != VALID:
-        print("====================== Invalid selector ======================")
-        raise InputError("Invalid selector")
-    return [sel, collection_data[0], collection_data[1]]
+    def concatenate(self, mapping, num_copies=1):
+        for i in range(num_copies):
+            self.schedule.extend(mapping)
 
-def selection_constraints(sel_in, k, r, solver, formula):
-    num_sel_consts = 0
-    # Had to do a little distributing to get this into CNF
-    for v in range(1, n+1):
-        zv,xv = get_var_num(["z",v]), get_var_num(["x",v])
-        for i in range(1, len(sel_in.family)+1):
-            v_in_Si = False
+    def print_sched(self):
+        print(f"Schedule (length {len(self.schedule)}):")
+        for slot in self.schedule:
+            print(slot)
 
-            clause_v_i = [zv, NOT * xv] # Left out the NOT * v_in_Si
-            for x_num_raw in sel_in.family[i-1]:
-                if x_num_raw != v:
-                    x_not_v = get_var_num(["x", x_num_raw])
-                    clause_v_i.append(x_not_v)
-                else:
-                    v_in_Si = True
-            if v_in_Si == True: # If v isn't in Si, the clause is trivially true
-                num_sel_consts += 2
-                solver.add_clause(clause_v_i)
-                formula.append(clause_v_i)
-
-def card_constraints(sel_in, k, r, solver, formula):
-    # \sum x_{v} = k
-    xv_k = CardEnc.equals(lits=list(range(n+1, 2*n+1)), 
-              bound=k, top_id = 2*n + 1, encoding=EncType.mtotalizer)
-    greatest_id = -1
-    for clause in xv_k:
-        solver.add_clause(clause)
-        formula.append(clause)
-        for num in clause:
-            if abs(num) > greatest_id:
-                greatest_id = abs(num)
-
-    # \sum z_{v} < r
-    zv_r = CardEnc.atmost(lits=list(range(1, n+1)), 
-              bound=r-1, top_id = greatest_id + 1, encoding=EncType.mtotalizer)
-    for clause in zv_r:
-        solver.add_clause(clause)
-        formula.append(clause)
-
-def my_trunc(num):
-    num *= 1000
-    num = math.trunc(num)
-    num /= 1000
-    return num
-
-cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2]]
-#cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
 n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
-#end_n_ind = len(n_vals)
+f_funcs = ['sqrt',2,4,8,16,32]
 
-for n in n_vals[11:]: # Cycling through n values
-    """
-    if n >= 200:
-        last_cd_ind = 5
-    else:
-        last_cd_ind = len(cd_vals)
-    for pair in cd_vals[:last_cd_ind]:
-    """
+num_iters = 10
 
-
-    for pair in cd_vals[:6]:
-        c, d = pair[0], pair[1]
-        k_0 = math.ceil(math.sqrt(n))
-        r_0 = math.ceil(k_0/2)
-
-        params_valid_time, params_invalid_time = 0, 0
-        params_gen_time = 0
-        num_correct = 0
-        num_iters = 10
-
-        logging_str = ''
-        if not logging_data:
-            logging_str = '[NOT LOGGING] '
-        header_str = f"{logging_str}({n}, {k_0}, {r_0})-sels for (c,d)=({c},{d}): "
-        lines_up = math.floor((len(header_str) - 1) / window_width) + 1
-        print(header_str)
-        progress_bar = []
-
-        for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
-
-            sel_tuple = prep_sel(n, k_0, r_0, c, d)
-            sel = sel_tuple[0]
-            
-            reduc_index = 0
-            valid = True
-            sub_index_invalid = False
-            k = k_0
-
-            iter_gen_time, iter_solve_time = 0, 0
-
-            k_vals = []
-            k_ind = 1
-            EPS = .001
-            while (new_k_val := math.ceil(k/2 + k/(2*k_ind) - EPS)) > math.ceil(k/2) + 1:
-                if len(k_vals) == 0 or (len(k_vals) > 0 and new_k_val != k_vals[len(k_vals) - 1]):
-                    k_vals.append(new_k_val)
-                k_ind += 1
-            #k_vals.append(math.ceil(k/2 - EPS))  NOT SURE THIS SHOULD BE COMMENTED OUT
-            
-            # Logarithmically iterate over SAME selector to check reducibility
-            for k in k_vals:                 
-                gen_timer = My_Timer()
-                solve_timer = My_Timer()
-
-                # Parameter for this iteration of reducibility check
-                r = math.ceil(k / 2)
-
-                # Initialize model
-                model = Cadical(use_timer = True)
-                formula = [] # Not integral to calculation, just for display
-
-                # Add constraints to model
-                gen_timer.start_timer()
-                selection_constraints(sel, k, r, model, formula)
-                card_constraints(sel, k, r, model, formula)
-                gen_timer.stop_timer()
-                iter_gen_time += gen_timer.get_time()
-
-                #Solve model
-                solve_timer.start_timer()
-                try:
-                    sat = model.solve()
-                except Exception as err:
-                    print("\n\n\nException occurred during the pysat solver's operation")
-                    print(f"Unexpected {err=}, {type(err)=}")
-                    clean_up()
-                    sys.exit(0)
-                solve_timer.stop_timer()
-                iter_solve_time += solve_timer.get_time()
-
-                if sat: # Only when invalid selector
-                    valid = False
-
-                    if reduc_index > 1: # Unlikely for top selector to be valid and sub-selector to not be
-                        sub_index_invalid = True
-
-                    if DEBUG_INVALID == True: # Dump details of the invalid selector
-                        model = model.get_model()
-                        k_subset = []
-                        print("Model:")
-                        print(model[:2*n])
-                        for xv in range(n+1, 2*n+1):
-                            if model[xv - 1] > 0:
-                                k_subset.append(xv - n)
-                        print("k_subset: " + str(k_subset))
-                        sel.print_sel(k_subset)
-                        input()
-                    break
-                else: # Valid selector
-                    model.delete()
-
-                reduc_index += 1 # Loop variable
-            # === Outside the logarithmic while loop over k ===
-
-            if logging_data: # Write data to file
-                valid_char = 'Y' if valid else 'N'
-                data_row = [c, d, n, k_0, r_0, iter_gen_time, iter_solve_time, valid_char, len(sel.family)]
-                writer.writerow(data_row)
-
-            # Update time + validity counts for this set of parameters
-            params_gen_time += iter_gen_time
-            if valid:
-                params_valid_time += iter_solve_time
-                progress_bar.append('+')
-                num_correct += 1
+for i in range(num_iters):
+    for f in f_funcs:
+        for n_val in n_vals:
+            if f == 'sqrt':
+                f_in = ceil(math.sqrt(n_val))
             else:
-                params_invalid_time += iter_solve_time
-                if sub_index_invalid:
-                    progress_bar.append('!')
-                else:
-                    progress_bar.append('-')
+                f_in = f
 
-            # (Temporary) normalized time variables for display purposes
-            avg_params_gen_time = my_trunc(params_gen_time / (iter_ind+1))
-
-            if num_correct != 0:
-                avg_params_valid_time = my_trunc(params_valid_time / num_correct)
-            else:
-                avg_params_valid_time = -1.0
-
-            if num_correct != iter_ind + 1:
-                avg_params_invalid_time = my_trunc(params_invalid_time / (iter_ind + 1 - num_correct))
-            else:
-                avg_params_invalid_time = -1.0
-
-            # Output stats
-            stats_str = f" gen time={avg_params_gen_time}, avg valid={avg_params_valid_time}, avg invalid={avg_params_invalid_time}, {num_correct}/{iter_ind+1}"
-            
-            # Moves the cursor up and clears the lines above
-            for i in range(lines_up):
-                print(f"\033[A\r{' ' * window_width}\r", end='', flush=True)
-            
-            str_len = len(header_str) + len(stats_str)
-            lines_up = math.floor((str_len - 1) / window_width) + 1
-
-            print(header_str + stats_str)
-            for char in progress_bar:
-                print(char, end='')
-            print('', end='', flush=True)
-        print()
-    print("==============================================================\n")
-
-clean_up()
-print("Successfully terminated")
+            mapping = Schedule(n_val, f_in)
+            mapping.generate_schedule()
