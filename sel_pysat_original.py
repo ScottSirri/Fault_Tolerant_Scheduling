@@ -3,17 +3,10 @@ from pysat.card import *
 import math, random
 import sys, os, time
 import csv, signal
-import itertools
 from datetime import datetime
 
-VALID = 1
-INVALID = 0
-
-WEAK_REDUC = 0
-STRONG_REDUC = 1
-
-SAT_METHOD = 0
-NAIVE_METHOD = 1
+VALID = 0
+INVALID = -1
 
 NOT = -1
 
@@ -146,10 +139,10 @@ class InputError(Exception):
 class Selector:
     family = []
 
-    def __init__(self, in_n, in_k, in_c, in_d):
+    def __init__(self, in_n, in_k, in_r, in_c, in_d):
         self.n = in_n
         self.k = in_k
-        self.r = math.ceil(self.k/2)
+        self.r = in_r
         self.c = in_c
         self.d = in_d
 
@@ -283,8 +276,8 @@ def print_clauses(formula):
             print(f"{num_str}   ",end='')
         print()
 
-def prep_sel(n, k, c, d):
-    sel = Selector(n, k, c, d)
+def prep_sel(n, k, r, c, d):
+    sel = Selector(n, k, r, c, d)
     collection_data = sel.populate()
     if sel.validate() != VALID:
         print("====================== Invalid selector ======================")
@@ -336,177 +329,162 @@ def my_trunc(num):
     num /= 1000
     return num
 
-def findsubsets(n, k):
-    s = range(1, n+1, 1)
-    return list(itertools.combinations(s, k))
-
-def num_selected(sel_arr):
-    num = 0
-    for elem in sel_arr:
-        if elem == True:
-            num += 1
-    return num
-
-# Naively check whether the selector is 1/2-good for the subset sizes in k_vals
-def naive_verify(sel, k_vals):
-    n = sel.n
-
-    for k in k_vals:
-        r = math.ceil(k/2)
-        subsets = findsubsets(n, k)
-
-        for subset in subsets:
-            selected = [False] * k
-
-            for slot in sel.family:
-                num_subset_elems = 0
-                selected_elem = -1
-
-                for elem in slot:
-                    if elem in subset:
-                        num_subset_elems += 1
-                        selected_elem = elem
-
-                if num_subset_elems == 1: # If elem is selected in this slot
-                    selected[selected_elem - 1] = True 
-
-            if num_selected(selected) < r:
-                return False
-
-    return True
-
-# Use SAT solver to check whether the selector is 1/2-good for the subset sizes in k_vals
-def sat_verify(sel, k_vals):
-    timer = My_Timer()
-
-    k in k_vals:                 
-
-        r = math.ceil(k / 2)
-
-        # Initialize model
-        model = Cadical(use_timer = True)
-        formula = [] # Not integral to calculation, just for display
-
-        # Add constraints to model
-        selection_constraints(sel, k, r, model, formula)
-        card_constraints(sel, k, r, model, formula)
-
-        #Solve model using SAT method
-        timer.start_timer()
-        try:
-            sat = model.solve()
-        except Exception as err:
-            print("\n\n\nException occurred during the pysat solver's operation")
-            print(f"Unexpected {err=}, {type(err)=}")
-            clean_up()
-            sys.exit(0)
-
-        if sat: # Only when invalid selector
-            valid = False
-            if DEBUG_INVALID == True: # Dump details of the invalid selector
-                model = model.get_model()
-                k_subset = []
-                print("Model:")
-                print(model[:2*n])
-                for xv in range(n+1, 2*n+1):
-                    if model[xv - 1] > 0:
-                        k_subset.append(xv - n)
-                print("k_subset: " + str(k_subset))
-                sel.print_sel(k_subset)
-                input()
-            break
-        else: # Valid selector
-            model.delete()
-
-    timer.stop_timer()
-    return [valid, timer.get_time()]
-
-def is_empty(list_in):
-    return len(list_in) == 0
-
-# Print the results of that iteration and, if logging data, write it to file
-def log_data(sel, data, method, reduc):
-    output_str = ''
-
-    if method == SAT_METHOD:
-        output_str += "  SAT"
-    else:
-        ouput_str += "NAIVE"
-
-    if reduc == WEAK_REDUC:
-        output_str += "  WEAK"
-    else:
-        output_str += " STRONG"
-
-    output_str += f" n={sel.n:<3} c={sel.c:<2} d={sel.d:<2} "
-
-    if data[0] == VALID:
-        output_str += " VALID "
-        output_str += data[1]
-    else:
-        output_str += " INVALID"
-
-    print(output_str)
-
-    if logging_data:
-        valid_str = 'Y' if data[0] == VALID else 'N'
-        method_str = 'sat' if method == SAT_METHOD else 'naive'
-        reduc_str = 'weak' if reduc == WEAK_REDUC else 'strong'
-        time = data[1]
-
-        data_row = [sel.c, sel.d, sel.n, time, valid_str, method_str, reduc_str, len(sel.family)]
-        writer.writerow(data_row)
-
 cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2]]
 #cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
 n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
+#end_n_ind = len(n_vals)
 
-num_iters = 10
+for n in n_vals[11:]: # Cycling through n values
+    """
+    if n >= 200:
+        last_cd_ind = 5
+    else:
+        last_cd_ind = len(cd_vals)
+    for pair in cd_vals[:last_cd_ind]:
+    """
 
-for n in n_vals: # Cycling through n values
-    for pair in cd_vals:
+
+    for pair in cd_vals[:6]:
         c, d = pair[0], pair[1]
         k_0 = math.ceil(math.sqrt(n))
         r_0 = math.ceil(k_0/2)
+
+        params_valid_time, params_invalid_time = 0, 0
+        params_gen_time = 0
         num_correct = 0
+        num_iters = 10
+
+        logging_str = ''
+        if not logging_data:
+            logging_str = '[NOT LOGGING] '
+        header_str = f"{logging_str}({n}, {k_0}, {r_0})-sels for (c,d)=({c},{d}): "
+        lines_up = math.floor((len(header_str) - 1) / window_width) + 1
+        print(header_str)
+        progress_bar = []
 
         for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
 
-            sel_tuple = prep_sel(n, k_0, c, d)
+            sel_tuple = prep_sel(n, k_0, r_0, c, d)
             sel = sel_tuple[0]
             
+            reduc_index = 0
             valid = True
             sub_index_invalid = False
             k = k_0
 
-            iter_sat_time, iter_naive_time = 0, 0
+            iter_gen_time, iter_solve_time = 0, 0
 
-            # The set of subset sizes that must be checked for 1/2-goodness in a weakly reducible selector
-            k_vals_weak = []
+            k_vals = []
             k_ind = 1
             EPS = .001
-            new_k_val = math.ceil(k/2 + k/(2*k_ind) - EPS)
-            while new_k_val > math.ceil(k/2) + 1:
-                if is_empty(k_vals_weak) or new_k_val != k_vals_weak[len(k_vals) - 1]:
-                    k_vals_weak.append(new_k_val)
+            while (new_k_val := math.ceil(k/2 + k/(2*k_ind) - EPS)) > math.ceil(k/2) + 1:
+                if len(k_vals) == 0 or (len(k_vals) > 0 and new_k_val != k_vals[len(k_vals) - 1]):
+                    k_vals.append(new_k_val)
                 k_ind += 1
-                new_k_val = math.ceil(k/2 + k/(2*k_ind) - EPS)
-            #k_vals_weak.append(math.ceil(k/2 - EPS))  NOT SURE THIS SHOULD BE COMMENTED OUT
+            #k_vals.append(math.ceil(k/2 - EPS))  NOT SURE THIS SHOULD BE COMMENTED OUT
+            
+            # Logarithmically iterate over SAME selector to check reducibility
+            for k in k_vals:                 
+                gen_timer = My_Timer()
+                solve_timer = My_Timer()
 
-            # The set of subset sizes that must be checked for 1/2-goodness in a strongly reducible selector
-            k_vals_strong = range(1, n+1, 1)
+                # Parameter for this iteration of reducibility check
+                r = math.ceil(k / 2)
 
-            sat_weak_data = sat_verify(sel, k_vals_weak)
-            log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
+                # Initialize model
+                model = Cadical(use_timer = True)
+                formula = [] # Not integral to calculation, just for display
 
-            sat_strong_data = sat_verify(sel, k_vals_strong)
-            log_data(sel, sat_strong_data, SAT_METHOD, STRONG_REDUC)
+                # Add constraints to model
+                gen_timer.start_timer()
+                selection_constraints(sel, k, r, model, formula)
+                card_constraints(sel, k, r, model, formula)
+                gen_timer.stop_timer()
+                iter_gen_time += gen_timer.get_time()
 
-            naive_weak_data = naive_verify(sel, k_vals_weak)
-            log_data(sel, naive_weak_data, NAIVE_METHOD, WEAK_REDUC)
+                #Solve model
+                solve_timer.start_timer()
+                try:
+                    sat = model.solve()
+                except Exception as err:
+                    print("\n\n\nException occurred during the pysat solver's operation")
+                    print(f"Unexpected {err=}, {type(err)=}")
+                    clean_up()
+                    sys.exit(0)
+                solve_timer.stop_timer()
+                iter_solve_time += solve_timer.get_time()
 
-            naive_strong_data = naive_verify(sel, k_vals_strong)
-            log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)
+                if sat: # Only when invalid selector
+                    valid = False
+
+                    if reduc_index > 1: # Unlikely for top selector to be valid and sub-selector to not be
+                        sub_index_invalid = True
+
+                    if DEBUG_INVALID == True: # Dump details of the invalid selector
+                        model = model.get_model()
+                        k_subset = []
+                        print("Model:")
+                        print(model[:2*n])
+                        for xv in range(n+1, 2*n+1):
+                            if model[xv - 1] > 0:
+                                k_subset.append(xv - n)
+                        print("k_subset: " + str(k_subset))
+                        sel.print_sel(k_subset)
+                        input()
+                    break
+                else: # Valid selector
+                    model.delete()
+
+                reduc_index += 1 # Loop variable
+            # === Outside the logarithmic while loop over k ===
+
+            if logging_data: # Write data to file
+                valid_char = 'Y' if valid else 'N'
+                data_row = [c, d, n, k_0, r_0, iter_gen_time, iter_solve_time, valid_char, len(sel.family)]
+                writer.writerow(data_row)
+
+            # Update time + validity counts for this set of parameters
+            params_gen_time += iter_gen_time
+            if valid:
+                params_valid_time += iter_solve_time
+                progress_bar.append('+')
+                num_correct += 1
+            else:
+                params_invalid_time += iter_solve_time
+                if sub_index_invalid:
+                    progress_bar.append('!')
+                else:
+                    progress_bar.append('-')
+
+            # (Temporary) normalized time variables for display purposes
+            avg_params_gen_time = my_trunc(params_gen_time / (iter_ind+1))
+
+            if num_correct != 0:
+                avg_params_valid_time = my_trunc(params_valid_time / num_correct)
+            else:
+                avg_params_valid_time = -1.0
+
+            if num_correct != iter_ind + 1:
+                avg_params_invalid_time = my_trunc(params_invalid_time / (iter_ind + 1 - num_correct))
+            else:
+                avg_params_invalid_time = -1.0
+
+            # Output stats
+            stats_str = f" gen time={avg_params_gen_time}, avg valid={avg_params_valid_time}, avg invalid={avg_params_invalid_time}, {num_correct}/{iter_ind+1}"
+            
+            # Moves the cursor up and clears the lines above
+            for i in range(lines_up):
+                print(f"\033[A\r{' ' * window_width}\r", end='', flush=True)
+            
+            str_len = len(header_str) + len(stats_str)
+            lines_up = math.floor((str_len - 1) / window_width) + 1
+
+            print(header_str + stats_str)
+            for char in progress_bar:
+                print(char, end='')
+            print('', end='', flush=True)
+        print()
+    print("==============================================================\n")
 
 clean_up()
 print("Successfully terminated")

@@ -7,27 +7,3 @@ address trends.
 See backlog of slack messages
 
 
-
-
-
-
-
-def is_prime(num):
-    if num < 2:
-        return False
-    for i in range(2, int(math.sqrt(num)) + 1):
-        if num % i == 0:
-            return False
-    return True
-
-# Generate the first num_primes prime numbers >= lower
-def generate_primes(lower, num_primes):
-    primes = []
-    i = lower
-    if i % 2 == 0:
-        i += 1
-    while len(primes) < num_primes:
-        if is_prime(i):
-            primes.append(i)
-        i += 2
-    return primes
