@@ -1,0 +1,5 @@
+c,d,n,k,r,gen_time,solve_time,valid,sel_len
+3,3,450,141.617811,Y,sat,weak,228
+3,3,500,212.594036,Y,sat,weak,228
+3,3,550,296.548162,Y,sat,weak,228
+3,3,600,437.0890979999999,Y,sat,weak,240

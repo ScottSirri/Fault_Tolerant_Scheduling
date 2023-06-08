@@ -1,12 +1,11 @@
-from pysat.solvers import Glucose3#, Cadical
+from pysat.solvers import Cadical153
 from pysat.card import *
 import math, random
+from math import ceil
 import sys, os, time
 import csv, signal
 import itertools
 from datetime import datetime
-
-#pysat.params['data_dirs'] = '~/pysatData'
 
 VALID = 1
 INVALID = 0
@@ -78,17 +77,6 @@ class My_Timer:
         elapsed = self.end_time - self.start_time
         return elapsed
 
-window_width = os.get_terminal_size().columns
-resize_msg = "DO NOT RESIZE WINDOW DURING PROGRAM EXECUTION"
-if window_width > 45:
-    print(f"{' ' * (math.floor((window_width - len(resize_msg)) / 2))}", end='', flush=True)
-print(resize_msg)
-
-def resizeHandler(signum, frame):
-    window_width = os.get_terminal_size().columns
-    #print("resize-window signal caught")
-signal.signal(signal.SIGWINCH, resizeHandler)
-
 logging_data = False
 
 if len(sys.argv) > 1:
@@ -153,16 +141,16 @@ class Selector:
     def __init__(self, in_n, in_k, in_c, in_d):
         self.n = in_n
         self.k = in_k
-        self.r = math.ceil(self.k/2)
+        self.r = ceil(self.k/2)
         self.c = in_c
         self.d = in_d
 
     # Populates the sets of the selector
     def populate(self):
-        num_collections = math.ceil(self.d * math.log(self.n))
-        collection_size = math.ceil(self.c * self.k)
-        #print("num cols:  math.ceil(%d * %f)" % (self.d, math.log(self.n)))
-        #print("col size:  math.ceil(%d * %f)" % (self.c, self.k))
+        num_collections = ceil(self.d * math.log(self.n))
+        collection_size = ceil(self.c * self.k)
+        #print("num cols:  ceil(%d * %f)" % (self.d, math.log(self.n)))
+        #print("col size:  ceil(%d * %f)" % (self.c, self.k))
         sel_family_size = num_collections * collection_size
 
         self.family = []
@@ -179,8 +167,8 @@ class Selector:
 
     # Generates an invalid selector for testing purposes
     def bad_populate(self):
-        num_collections = math.ceil(self.d * math.log(self.n))
-        collection_size = math.ceil(self.c * self.k)
+        num_collections = ceil(self.d * math.log(self.n))
+        collection_size = ceil(self.c * self.k)
         sel_family_size = num_collections * collection_size
         print(" ====== BEWARE! BAD SELECTOR POPULATION! ======")
 
@@ -198,7 +186,7 @@ class Selector:
     def modulo_num_slots(self):
         n = self.n
         k = self.k
-        num_collections = k * math.ceil(math.log(n) / math.log(k * math.log(n)))
+        num_collections = k * ceil(math.log(n) / math.log(k * math.log(n)))
         primes = generate_primes(num_collections, math.floor(k * math.log(n)) + 1)
         num_slots = 0
         for prime in primes:
@@ -357,7 +345,8 @@ def naive_verify(sel, k_vals):
     n = sel.n
 
     for k in k_vals:
-        r = math.ceil(k/2)
+        print(f"next k = {k}")
+        r = ceil(k/2)
         subsets = findsubsets(n, k)
 
         for subset in subsets:
@@ -389,11 +378,10 @@ def sat_verify(sel, k_vals):
 
     for k in k_vals:                 
 
-        r = math.ceil(k/2 - EPS)
+        r = ceil(k/2 - EPS)
 
         # Initialize model
-        model = Glucose3(use_timer = True)
-        #model = Cadical(use_timer = True)
+        model = Cadical153(use_timer = True)
         formula = [] # Not integral to calculation, just for display
 
         # Add constraints to model
@@ -450,7 +438,7 @@ def log_data(sel, data, method, reduc):
 
     if data[0] == VALID:
         output_str += " VALID "
-        output_str += f"{data[1]:.2f}"
+        output_str += f"{data[1]:3.4f}"
     else:
         output_str += " INVALID"
 
@@ -468,8 +456,8 @@ def log_data(sel, data, method, reduc):
 def generate_weak_k_vals(n, k):
     k_vals_weak = []
     k_ind = 1
-    new_k_val = math.ceil(k/2 + k/(2*k_ind) - EPS)
-    lowest = math.ceil(k/2 - EPS) + 1
+    new_k_val = ceil(k/2 + k/(2*k_ind) - EPS)
+    lowest = ceil(k/2 - EPS) + 1
     assert new_k_val == k, "First weak k val isn't k"
 
     while new_k_val > lowest:
@@ -478,21 +466,23 @@ def generate_weak_k_vals(n, k):
             k_vals_weak.append(new_k_val)
 
         k_ind += 1
-        new_k_val = math.ceil(k/2 + k/(2*k_ind) - EPS)
+        new_k_val = ceil(k/2 + k/(2*k_ind) - EPS)
 
     k_vals_weak.append(lowest)
     return k_vals_weak
     #k_vals_weak.append(lowest - 1)  NOT SURE THIS SHOULD BE COMMENTED OUT
 
 #cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
-n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
+#n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
+n_vals = [250]
+#n_vals = [750,800,850,900,950,1000]
 
-num_iters = 10
+num_iters = 1
 c, d = 3, 3
 
 for n in n_vals: # Cycling through n values
 
-    k = math.ceil(math.sqrt(n))
+    k = 4
 
     print(f"\n====== n={n}, k={k} ========\n")
 
@@ -511,7 +501,7 @@ for n in n_vals: # Cycling through n values
 
         sat_weak_data = sat_verify(sel, k_vals_weak)
         log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
-
+"""
         sat_strong_data = sat_verify(sel, k_vals_strong)
         log_data(sel, sat_strong_data, SAT_METHOD, STRONG_REDUC)
 
@@ -519,7 +509,7 @@ for n in n_vals: # Cycling through n values
         log_data(sel, naive_weak_data, NAIVE_METHOD, WEAK_REDUC)
 
         naive_strong_data = naive_verify(sel, k_vals_strong)
-        log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)
+        log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)"""
 
 clean_up()
 print("Successfully terminated")
