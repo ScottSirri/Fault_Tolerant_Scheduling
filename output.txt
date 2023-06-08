@@ -1,9 +1,0 @@
-
-====== n=250, k=4 ========
-
-weak:  [4, 3]
-strong:  range(1, 5)
-  SAT   WEAK n=250 c=3 d=3  VALID 8.9521
-not logging data, no file to close
-elapsed real time: 8.953747034072876
-Successfully terminated
