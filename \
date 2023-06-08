@@ -352,8 +352,6 @@ def num_selected(sel_arr):
 
 # Naively check whether the selector is 1/2-good for the subset sizes in k_vals
 def naive_verify(sel, k_vals):
-    timer = My_Timer()
-    timer.start_timer()
     n = sel.n
 
     for k in k_vals:
@@ -361,7 +359,7 @@ def naive_verify(sel, k_vals):
         subsets = findsubsets(n, k)
 
         for subset in subsets:
-            selected = [False] * n
+            selected = [False] * k
 
             for slot in sel.family:
                 num_subset_elems = 0
@@ -376,15 +374,13 @@ def naive_verify(sel, k_vals):
                     selected[selected_elem - 1] = True 
 
             if num_selected(selected) < r:
-                return [False, -1]
+                return False
 
-    timer.stop_timer()
-    return [True, timer.get_time()]
+    return True
 
 # Use SAT solver to check whether the selector is 1/2-good for the subset sizes in k_vals
 def sat_verify(sel, k_vals):
     timer = My_Timer()
-    timer.start_timer()
     valid = True
 
     for k in k_vals:                 
@@ -401,6 +397,7 @@ def sat_verify(sel, k_vals):
         card_constraints(sel, k, r, model, formula)
 
         #Solve model using SAT method
+        timer.start_timer()
         try:
             sat = model.solve()
         except Exception as err:
@@ -422,7 +419,7 @@ def sat_verify(sel, k_vals):
                 print("k_subset: " + str(k_subset))
                 sel.print_sel(k_subset)
                 input()
-            return [False, -1]
+            break
         else: # Valid selector
             model.delete()
 
@@ -439,10 +436,10 @@ def log_data(sel, data, method, reduc):
     if method == SAT_METHOD:
         output_str += "  SAT"
     else:
-        output_str += "NAIVE"
+        ouput_str += "NAIVE"
 
     if reduc == WEAK_REDUC:
-        output_str += "   WEAK"
+        output_str += "  WEAK"
     else:
         output_str += " STRONG"
 
@@ -474,7 +471,7 @@ def generate_weak_k_vals(n, k):
 
     while new_k_val > lowest:
 
-        if is_empty(k_vals_weak) or new_k_val != k_vals_weak[len(k_vals_weak) - 1]:
+        if is_empty(k_vals_weak) or new_k_val != k_vals_weak[len(k_vals) - 1]:
             k_vals_weak.append(new_k_val)
 
         k_ind += 1
@@ -494,20 +491,20 @@ for n in n_vals: # Cycling through n values
 
     k = math.ceil(math.sqrt(n))
 
-    print(f"\n====== n={n}, k={k} ========\n")
-
-    # The set of subset sizes that must be checked for 1/2-goodness in a weakly reducible selector
-    k_vals_weak = generate_weak_k_vals(n, k)
-
-    # The set of subset sizes that must be checked for 1/2-goodness in a strongly reducible selector
-    k_vals_strong = range(1, k+1, 1) # The list [1, 2, ..., k]
-
-    print("weak: ", k_vals_weak)
-    print("strong: ", k_vals_strong)
+    print(f"====== n={n}, k={k} ========\n")
 
     for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
 
         sel = prep_sel(n, k, c, d)
+        
+        # The set of subset sizes that must be checked for 1/2-goodness in a weakly reducible selector
+        k_vals_weak = generate_weak_k_vals(n, k)
+
+        # The set of subset sizes that must be checked for 1/2-goodness in a strongly reducible selector
+        k_vals_strong = range(1, k+1, 1) # The list [1, 2, ..., k]
+
+        print("weak: ", k_vals_weak)
+        print("strong: ", k_vals_strong)
 
         sat_weak_data = sat_verify(sel, k_vals_weak)
         log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
