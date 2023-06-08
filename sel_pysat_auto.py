@@ -15,6 +15,8 @@ STRONG_REDUC = 1
 SAT_METHOD = 0
 NAIVE_METHOD = 1
 
+EPS = .001
+
 NOT = -1
 
 DEBUG_INVALID = False
@@ -172,7 +174,6 @@ class Selector:
             for sel_set in collection:
                 if len(sel_set) > 0: 
                     self.family.append(sel_set)
-        return [num_collections, collection_size]
 
     # Generates an invalid selector for testing purposes
     def bad_populate(self):
@@ -285,11 +286,11 @@ def print_clauses(formula):
 
 def prep_sel(n, k, c, d):
     sel = Selector(n, k, c, d)
-    collection_data = sel.populate()
+    sel.populate()
     if sel.validate() != VALID:
         print("====================== Invalid selector ======================")
         raise InputError("Invalid selector")
-    return [sel, collection_data[0], collection_data[1]]
+    return sel
 
 def selection_constraints(sel_in, k, r, solver, formula):
     num_sel_consts = 0
@@ -379,9 +380,9 @@ def naive_verify(sel, k_vals):
 def sat_verify(sel, k_vals):
     timer = My_Timer()
 
-    k in k_vals:                 
+    for k in k_vals:                 
 
-        r = math.ceil(k / 2)
+        r = math.ceil(k/2 - EPS)
 
         # Initialize model
         model = Cadical(use_timer = True)
@@ -438,11 +439,11 @@ def log_data(sel, data, method, reduc):
     else:
         output_str += " STRONG"
 
-    output_str += f" n={sel.n:<3} c={sel.c:<2} d={sel.d:<2} "
+    output_str += f" n={sel.n:>3} c={sel.c} d={sel.d} "
 
     if data[0] == VALID:
         output_str += " VALID "
-        output_str += data[1]
+        output_str += f"{data[1]:.2f}"
     else:
         output_str += " INVALID"
 
@@ -457,56 +458,55 @@ def log_data(sel, data, method, reduc):
         data_row = [sel.c, sel.d, sel.n, time, valid_str, method_str, reduc_str, len(sel.family)]
         writer.writerow(data_row)
 
-cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2]]
+def generate_weak_k_vals(n, k):
+    k_vals_weak = []
+    k_ind = 1
+    new_k_val = math.ceil(k/2 + k/(2*k_ind) - EPS)
+    lowest = math.ceil(k/2 - EPS) + 1
+    assert new_k_val == k, "First weak k val isn't k"
+
+    while new_k_val > lowest:
+
+        if is_empty(k_vals_weak) or new_k_val != k_vals_weak[len(k_vals) - 1]:
+            k_vals_weak.append(new_k_val)
+
+        k_ind += 1
+        new_k_val = math.ceil(k/2 + k/(2*k_ind) - EPS)
+
+    k_vals_weak.append(lowest)
+    #k_vals_weak.append(lowest - 1)  NOT SURE THIS SHOULD BE COMMENTED OUT
+
 #cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
 n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
 
 num_iters = 10
+c, d = 3, 3
 
 for n in n_vals: # Cycling through n values
-    for pair in cd_vals:
-        c, d = pair[0], pair[1]
-        k_0 = math.ceil(math.sqrt(n))
-        r_0 = math.ceil(k_0/2)
-        num_correct = 0
 
-        for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
+    k = math.ceil(math.sqrt(n))
 
-            sel_tuple = prep_sel(n, k_0, c, d)
-            sel = sel_tuple[0]
-            
-            valid = True
-            sub_index_invalid = False
-            k = k_0
+    for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
 
-            iter_sat_time, iter_naive_time = 0, 0
+        sel = prep_sel(n, k, c, d)
+        
+        # The set of subset sizes that must be checked for 1/2-goodness in a weakly reducible selector
+        k_vals_weak = generate_weak_k_vals(n, k)
 
-            # The set of subset sizes that must be checked for 1/2-goodness in a weakly reducible selector
-            k_vals_weak = []
-            k_ind = 1
-            EPS = .001
-            new_k_val = math.ceil(k/2 + k/(2*k_ind) - EPS)
-            while new_k_val > math.ceil(k/2) + 1:
-                if is_empty(k_vals_weak) or new_k_val != k_vals_weak[len(k_vals) - 1]:
-                    k_vals_weak.append(new_k_val)
-                k_ind += 1
-                new_k_val = math.ceil(k/2 + k/(2*k_ind) - EPS)
-            #k_vals_weak.append(math.ceil(k/2 - EPS))  NOT SURE THIS SHOULD BE COMMENTED OUT
+        # The set of subset sizes that must be checked for 1/2-goodness in a strongly reducible selector
+        k_vals_strong = range(1, k+1, 1) # The list [1, 2, ..., k]
 
-            # The set of subset sizes that must be checked for 1/2-goodness in a strongly reducible selector
-            k_vals_strong = range(1, n+1, 1)
+        sat_weak_data = sat_verify(sel, k_vals_weak)
+        log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
 
-            sat_weak_data = sat_verify(sel, k_vals_weak)
-            log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
+        sat_strong_data = sat_verify(sel, k_vals_strong)
+        log_data(sel, sat_strong_data, SAT_METHOD, STRONG_REDUC)
 
-            sat_strong_data = sat_verify(sel, k_vals_strong)
-            log_data(sel, sat_strong_data, SAT_METHOD, STRONG_REDUC)
+        naive_weak_data = naive_verify(sel, k_vals_weak)
+        log_data(sel, naive_weak_data, NAIVE_METHOD, WEAK_REDUC)
 
-            naive_weak_data = naive_verify(sel, k_vals_weak)
-            log_data(sel, naive_weak_data, NAIVE_METHOD, WEAK_REDUC)
-
-            naive_strong_data = naive_verify(sel, k_vals_strong)
-            log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)
+        naive_strong_data = naive_verify(sel, k_vals_strong)
+        log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)
 
 clean_up()
 print("Successfully terminated")
