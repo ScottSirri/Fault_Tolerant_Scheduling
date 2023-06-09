@@ -42,7 +42,7 @@ class My_Timer:
         if self.end_time <= 0 and self.start_time > 0:
             self.end_time = time.process_time()
         else:
-            print(f"stop_timer error: self.end_time = {self.end_time} and self.start_time = {self.start_time}")
+            print("stop_timer error: self.end_time = %f and self.start_time = %f" % (self.end_time, self.start_time))
 
     # Print the timer duration and reset it
     def print_timer(self):
@@ -88,8 +88,8 @@ if logging_data:
     date_time_str = now.strftime("%Y_%m_%d-%H_%M_%S")
     filename = './data/' + date_time_str
 
-    f = open(filename, 'w')
-    writer = csv.writer(f)
+    file_obj = open(filename, 'w')
+    writer = csv.writer(file_obj)
     header =   ['c', 'd', 'n', 'time', 'valid', 'method', 'reducibility', 'mapping length']
     writer.writerow(header)
 
@@ -197,7 +197,7 @@ class Selector:
     def print_sel(self, selected_list=None):
         if selected_list == None:
             selected_list = []
-        print(f"Candidate selector({self.n}, {self.k}, {self.r}):")
+        print("Candidate selector(%d, %d, %d):" % (self.n, self.k, self.r))
         for sel_set in self.family:
             print("\t", end='')
             marker = "    " 
@@ -206,7 +206,7 @@ class Selector:
             print(marker, end = '')
             #print(sel_set)
             for elem in sel_set:
-                print(f" .{elem}. ", end="")
+                print(" .%d. " % (elem), end="")
             print()
         print()
 
@@ -257,7 +257,7 @@ def print_clauses(formula):
                     num_str = num_str + str(var_name[1])
             else:
                 num_str = var_name[0] + str(var_name[1])
-            print(f"{num_str}   ",end='')
+            print("%s   " % (num_str),end='')
         print()
 
 def prep_sel(n, k, c, d):
@@ -326,7 +326,7 @@ def naive_verify(sel, k_vals):
     n = sel.n
 
     for k in k_vals:
-        print(f"next k = {k}")
+        print("next k = %d" % (k))
         r = ceil(k/2)
         subsets = findsubsets(n, k)
 
@@ -373,7 +373,7 @@ def sat_verify(sel, k_vals):
             sat = model.solve()
         except Exception as err:
             print("\n\n\nException occurred during the pysat solver's operation")
-            print(f"Unexpected {err=}, {type(err)=}")
+            print("Unexpected {err=}, {type(err)=}")
             clean_up()
             sys.exit(0)
 
@@ -418,7 +418,7 @@ def log_data(sel, data, method, reduc):
     else:
         output_str += " INVALID"
 
-    print(output_str)
+    print(output_str, flush=True)
 
     if logging_data:
         valid_str = 'Y' if data[0] == VALID else 'N'
@@ -428,6 +428,7 @@ def log_data(sel, data, method, reduc):
 
         data_row = [sel.c, sel.d, sel.n, time, valid_str, method_str, reduc_str, len(sel.family)]
         writer.writerow(data_row)
+        file_obj.flush()
 
 def is_empty(list_in):
     return len(list_in) == 0
@@ -452,6 +453,7 @@ def generate_weak_k_vals(n, k):
     return k_vals_weak
 
 #cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
+#n_vals = range(100, 1001, 100)
 n_vals = range(1000, 99, -100)
 
 num_iters = 10
@@ -465,7 +467,7 @@ for i in range(num_iters):
         print("")
         if not logging_data:
             print("[NOT LOGGING DATA]", end='')
-        print(f"====== n={n}, k={k} ========\n")
+        print("====== n=%d, k=%d ========\n" % (n,k))
 
         # The set of subset sizes that must be checked for 1/2-goodness in a weakly reducible selector
         k_vals_weak = generate_weak_k_vals(n, k)
@@ -476,21 +478,19 @@ for i in range(num_iters):
         print("weak: ", k_vals_weak)
         """print("strong: ", k_vals_strong)"""
 
-        for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
+        sel = prep_sel(n, k, c, d)
 
-            sel = prep_sel(n, k, c, d)
+        sat_weak_data = sat_verify(sel, k_vals_weak)
+        log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
 
-            sat_weak_data = sat_verify(sel, k_vals_weak)
-            log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
-    
-            """sat_strong_data = sat_verify(sel, k_vals_strong)
-            log_data(sel, sat_strong_data, SAT_METHOD, STRONG_REDUC)
+        """sat_strong_data = sat_verify(sel, k_vals_strong)
+        log_data(sel, sat_strong_data, SAT_METHOD, STRONG_REDUC)
 
-            naive_weak_data = naive_verify(sel, k_vals_weak)
-            log_data(sel, naive_weak_data, NAIVE_METHOD, WEAK_REDUC)
+        naive_weak_data = naive_verify(sel, k_vals_weak)
+        log_data(sel, naive_weak_data, NAIVE_METHOD, WEAK_REDUC)
 
-            naive_strong_data = naive_verify(sel, k_vals_strong)
-            log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)"""
+        naive_strong_data = naive_verify(sel, k_vals_strong)
+        log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)"""
 
 clean_up()
 print("Successfully terminated")
