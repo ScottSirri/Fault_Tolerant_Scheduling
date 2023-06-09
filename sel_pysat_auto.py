@@ -7,13 +7,13 @@ import csv, signal
 import itertools
 from datetime import datetime
 
-VALID = 1
-INVALID = 0
+VALID   = True
+INVALID = False
 
-WEAK_REDUC = 0
+WEAK_REDUC   = 0
 STRONG_REDUC = 1
 
-SAT_METHOD = 0
+SAT_METHOD   = 0
 NAIVE_METHOD = 1
 
 EPS = .001
@@ -42,7 +42,7 @@ class My_Timer:
         if self.end_time <= 0 and self.start_time > 0:
             self.end_time = time.process_time()
         else:
-            print("stop_timer error")
+            print(f"stop_timer error: self.end_time = {self.end_time} and self.start_time = {self.start_time}")
 
     # Print the timer duration and reset it
     def print_timer(self):
@@ -149,8 +149,6 @@ class Selector:
     def populate(self):
         num_collections = ceil(self.d * math.log(self.n))
         collection_size = ceil(self.c * self.k)
-        #print("num cols:  ceil(%d * %f)" % (self.d, math.log(self.n)))
-        #print("col size:  ceil(%d * %f)" % (self.c, self.k))
         sel_family_size = num_collections * collection_size
 
         self.family = []
@@ -180,18 +178,6 @@ class Selector:
                     sel_set.append(element+1)
             if len(sel_set) > 0: 
                 self.family.append(sel_set)
-
-    # Returns the number of sets that would be in a selector of these
-    # parameters produced by the modulo mapping method in Dr. Agrawal's paper.
-    def modulo_num_slots(self):
-        n = self.n
-        k = self.k
-        num_collections = k * ceil(math.log(n) / math.log(k * math.log(n)))
-        primes = generate_primes(num_collections, math.floor(k * math.log(n)) + 1)
-        num_slots = 0
-        for prime in primes:
-            num_slots += prime
-        return num_slots
 
     # Validates that selector parameters are sensical
     def validate(self):
@@ -321,16 +307,11 @@ def card_constraints(sel_in, k, r, solver, formula):
         solver.add_clause(clause)
         formula.append(clause)
 
-def my_trunc(num):
-    num *= 1000
-    num = math.trunc(num)
-    num /= 1000
-    return num
-
 def findsubsets(n, k):
     s = range(1, n+1, 1)
     return list(itertools.combinations(s, k))
 
+# Count the number of True elements in a passed list of booleans
 def num_selected(sel_arr):
     num = 0
     for elem in sel_arr:
@@ -365,16 +346,15 @@ def naive_verify(sel, k_vals):
                     selected[selected_elem - 1] = True 
 
             if num_selected(selected) < r:
-                return [False, -1]
+                return [INVALID, -1]
 
     timer.stop_timer()
-    return [True, timer.get_time()]
+    return [VALID, timer.get_time()]
 
 # Use SAT solver to check whether the selector is 1/2-good for the subset sizes in k_vals
 def sat_verify(sel, k_vals):
     timer = My_Timer()
     timer.start_timer()
-    valid = True
 
     for k in k_vals:                 
 
@@ -398,7 +378,6 @@ def sat_verify(sel, k_vals):
             sys.exit(0)
 
         if sat: # Only when not 1/2-good for this subset size
-            valid = False
             if DEBUG_INVALID == True: # Dump details of the invalid selector
                 model = model.get_model()
                 k_subset = []
@@ -410,15 +389,12 @@ def sat_verify(sel, k_vals):
                 print("k_subset: " + str(k_subset))
                 sel.print_sel(k_subset)
                 input()
-            return [False, -1]
+            return [INVALID, -1]
         else: # Valid selector
             model.delete()
 
     timer.stop_timer()
-    return [valid, timer.get_time()]
-
-def is_empty(list_in):
-    return len(list_in) == 0
+    return [VALID, timer.get_time()]
 
 # Print the results of that iteration and, if logging data, write it to file
 def log_data(sel, data, method, reduc):
@@ -453,6 +429,9 @@ def log_data(sel, data, method, reduc):
         data_row = [sel.c, sel.d, sel.n, time, valid_str, method_str, reduc_str, len(sel.family)]
         writer.writerow(data_row)
 
+def is_empty(list_in):
+    return len(list_in) == 0
+
 def generate_weak_k_vals(n, k):
     k_vals_weak = []
     k_ind = 1
@@ -469,47 +448,49 @@ def generate_weak_k_vals(n, k):
         new_k_val = ceil(k/2 + k/(2*k_ind) - EPS)
 
     k_vals_weak.append(lowest)
-    return k_vals_weak
     #k_vals_weak.append(lowest - 1)  NOT SURE THIS SHOULD BE COMMENTED OUT
+    return k_vals_weak
 
 #cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
-#n_vals = [10,20,30,40,50,60,70,80,90,100,200,300,400,500]
-n_vals = [800,850,900,950]
-#n_vals = [750,800,850,900,950,1000]
+n_vals = range(1000, 99, -100)
 
 num_iters = 1
 c, d = 3, 3
 
-for n in n_vals: # Cycling through n values
+for i in range(num_iters):
+    for n in n_vals: # Cycling through n values
 
-    k = 4
+        k = 4
 
-    print(f"\n====== n={n}, k={k} ========\n")
+        print("")
+        if not logging_data:
+            print("[NOT LOGGING DATA]", end='')
+        print(f"====== n={n}, k={k} ========\n")
 
-    # The set of subset sizes that must be checked for 1/2-goodness in a weakly reducible selector
-    k_vals_weak = generate_weak_k_vals(n, k)
+        # The set of subset sizes that must be checked for 1/2-goodness in a weakly reducible selector
+        k_vals_weak = generate_weak_k_vals(n, k)
 
-    # The set of subset sizes that must be checked for 1/2-goodness in a strongly reducible selector
-    k_vals_strong = range(1, k+1, 1) # The list [1, 2, ..., k]
+        # The set of subset sizes that must be checked for 1/2-goodness in a strongly reducible selector
+        """k_vals_strong = range(1, k+1, 1) # The list [1, 2, ..., k]"""
 
-    print("weak: ", k_vals_weak)
-    print("strong: ", k_vals_strong)
+        print("weak: ", k_vals_weak)
+        """print("strong: ", k_vals_strong)"""
 
-    for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
+        for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
 
-        sel = prep_sel(n, k, c, d)
+            sel = prep_sel(n, k, c, d)
 
-        sat_weak_data = sat_verify(sel, k_vals_weak)
-        log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
-"""
-        sat_strong_data = sat_verify(sel, k_vals_strong)
-        log_data(sel, sat_strong_data, SAT_METHOD, STRONG_REDUC)
+            sat_weak_data = sat_verify(sel, k_vals_weak)
+            log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
+    
+            """sat_strong_data = sat_verify(sel, k_vals_strong)
+            log_data(sel, sat_strong_data, SAT_METHOD, STRONG_REDUC)
 
-        naive_weak_data = naive_verify(sel, k_vals_weak)
-        log_data(sel, naive_weak_data, NAIVE_METHOD, WEAK_REDUC)
+            naive_weak_data = naive_verify(sel, k_vals_weak)
+            log_data(sel, naive_weak_data, NAIVE_METHOD, WEAK_REDUC)
 
-        naive_strong_data = naive_verify(sel, k_vals_strong)
-        log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)"""
+            naive_strong_data = naive_verify(sel, k_vals_strong)
+            log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)"""
 
 clean_up()
 print("Successfully terminated")
