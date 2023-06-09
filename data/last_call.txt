@@ -1,9 +1,0 @@
-experimental setup, sample size >= 10
-graphs in slack. full schedules only. mapping lngth y axis, n x, differenht lines for different f. instead of tables. only tables up to 5???? remove 6,7. then 8,9,10,11,12 appendix. maybe grid of tables. 18 dont need. remove sample size wholly. compare modulo w tbls 13-17. normalize (ratio of modulo to ours) across n, 5 lines for f
-Other chart is for time, ours vs naive. time out naive if necessary
-address trends.
-2.40 ghz cores, intel zeon core 614(a/8?) processor. 
-
-See backlog of slack messages
-
-

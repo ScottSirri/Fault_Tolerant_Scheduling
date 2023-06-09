@@ -90,7 +90,7 @@ if logging_data:
 
     f = open(filename, 'w')
     writer = csv.writer(f)
-    header = ['c', 'd', 'n', 'k', 'r', 'gen_time', 'solve_time', 'valid', 'sel_len']
+    header =   ['c', 'd', 'n', 'time', 'valid', 'method', 'reducibility', 'mapping length']
     writer.writerow(header)
 
 def clean_up():
@@ -454,7 +454,7 @@ def generate_weak_k_vals(n, k):
 #cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
 n_vals = range(1000, 99, -100)
 
-num_iters = 1
+num_iters = 10
 c, d = 3, 3
 
 for i in range(num_iters):
