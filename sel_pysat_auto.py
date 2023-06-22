@@ -1,11 +1,14 @@
 from pysat.solvers import Cadical153
 from pysat.card import *
-import math, random
-from math import ceil
+from random import uniform, random
+from math import ceil, floor, sqrt
 import sys, os, time
 import csv, signal
 import itertools
 from datetime import datetime
+import matrix_code
+from matrix_code import *
+from vp import VpTree
 
 VALID   = True
 INVALID = False
@@ -42,7 +45,7 @@ class My_Timer:
         if self.end_time <= 0 and self.start_time > 0:
             self.end_time = time.process_time()
         else:
-            print("stop_timer error: self.end_time = %f and self.start_time = %f" % (self.end_time, self.start_time))
+            print(f"stop_timer error: self.end_time = {self.end_time} and self.start_time = {self.start_time}")
 
     # Print the timer duration and reset it
     def print_timer(self):
@@ -83,14 +86,14 @@ if len(sys.argv) > 1:
     if sys.argv[1] == 'log':
         logging_data = True
 
-if logging_data:
-    now = datetime.now()
-    date_time_str = now.strftime("%Y_%m_%d-%H_%M_%S")
-    filename = './data/' + date_time_str
+now = datetime.now()
+date_time_str = now.strftime("%Y_%m_%d-%H_%M_%S")
+filename = './data/' + date_time_str
+file_obj = open(filename, 'w')
 
-    file_obj = open(filename, 'w')
+if logging_data:
     writer = csv.writer(file_obj)
-    header =   ['c', 'd', 'n', 'time', 'valid', 'method', 'reducibility', 'mapping length']
+    header = ['c', 'd', 'n', 'k', 'r', 'gen_time', 'solve_time', 'valid', 'sel_len']
     writer.writerow(header)
 
 def clean_up():
@@ -156,8 +159,8 @@ class Selector:
             collection = [] # List of lists, each of which is a selector set
             for j in range(collection_size):
                 collection.append([])
-            for element in range(n):
-                index = math.floor(random.uniform(0, collection_size))
+            for element in range(self.n):
+                index = floor(uniform(0, collection_size))
                 collection[index].append(element+1)
             for sel_set in collection:
                 if len(sel_set) > 0: 
@@ -173,7 +176,7 @@ class Selector:
         self.family = []
         for i in range(self.k):
             sel_set = [] # List of lists, each of which is a selector set
-            for element in range(n):
+            for element in range(self.n):
                 if random.random() < .1:
                     sel_set.append(element+1)
             if len(sel_set) > 0: 
@@ -197,7 +200,7 @@ class Selector:
     def print_sel(self, selected_list=None):
         if selected_list == None:
             selected_list = []
-        print("Candidate selector(%d, %d, %d):" % (self.n, self.k, self.r))
+        print(f"Candidate selector({self.n}, {self.k}, {self.r}):")
         for sel_set in self.family:
             print("\t", end='')
             marker = "    " 
@@ -206,7 +209,7 @@ class Selector:
             print(marker, end = '')
             #print(sel_set)
             for elem in sel_set:
-                print(" .%d. " % (elem), end="")
+                print(f" .{elem}. ", end="")
             print()
         print()
 
@@ -257,7 +260,7 @@ def print_clauses(formula):
                     num_str = num_str + str(var_name[1])
             else:
                 num_str = var_name[0] + str(var_name[1])
-            print("%s   " % (num_str),end='')
+            print(f"{num_str}   ",end='')
         print()
 
 def prep_sel(n, k, c, d):
@@ -326,7 +329,7 @@ def naive_verify(sel, k_vals):
     n = sel.n
 
     for k in k_vals:
-        print("next k = %d" % (k))
+        print(f"next k = {k}")
         r = ceil(k/2)
         subsets = findsubsets(n, k)
 
@@ -346,10 +349,12 @@ def naive_verify(sel, k_vals):
                     selected[selected_elem - 1] = True 
 
             if num_selected(selected) < r:
-                return [INVALID, -1]
+                print(f"{subset} invalid")
+                timer.stop_timer()
+                return [INVALID, timer.get_time(), list(subset)]
 
     timer.stop_timer()
-    return [VALID, timer.get_time()]
+    return [VALID, timer.get_time(), None]
 
 # Use SAT solver to check whether the selector is 1/2-good for the subset sizes in k_vals
 def sat_verify(sel, k_vals):
@@ -373,11 +378,12 @@ def sat_verify(sel, k_vals):
             sat = model.solve()
         except Exception as err:
             print("\n\n\nException occurred during the pysat solver's operation")
-            print("Unexpected {err=}, {type(err)=}")
+            print(f"Unexpected {err=}, {type(err)=}")
             clean_up()
             sys.exit(0)
 
         if sat: # Only when not 1/2-good for this subset size
+            timer.stop_timer()
             if DEBUG_INVALID == True: # Dump details of the invalid selector
                 model = model.get_model()
                 k_subset = []
@@ -389,7 +395,7 @@ def sat_verify(sel, k_vals):
                 print("k_subset: " + str(k_subset))
                 sel.print_sel(k_subset)
                 input()
-            return [INVALID, -1]
+            return [INVALID, timer.get_time()]
         else: # Valid selector
             model.delete()
 
@@ -410,13 +416,14 @@ def log_data(sel, data, method, reduc):
     else:
         output_str += " STRONG"
 
-    output_str += f" n={sel.n:>3} c={sel.c} d={sel.d} "
+    output_str += f" n={sel.n:>3} k={sel.k} c={sel.c} d={sel.d} "
 
     if data[0] == VALID:
-        output_str += " VALID "
+        output_str += "   VALID "
         output_str += f"{data[1]:3.4f}"
     else:
-        output_str += " INVALID"
+        output_str += " INVALID "
+        output_str += f"{data[1]:3.4f}"
 
     print(output_str, flush=True)
 
@@ -452,45 +459,107 @@ def generate_weak_k_vals(n, k):
     #k_vals_weak.append(lowest - 1)  NOT SURE THIS SHOULD BE COMMENTED OUT
     return k_vals_weak
 
-#cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
-#n_vals = range(100, 1001, 100)
-n_vals = range(1000, 99, -100)
+n = 100
+k = 10
+c,d = 1,2
 
-num_iters = 10
+done = False
+
+while not done:
+
+    #k_vals_weak = generate_weak_k_vals(n, k)
+    k_vals = [k]
+    sel = prep_sel(n, k, c, d)
+
+    print("Beginning SAT verification...")
+    sat_weak_data = sat_verify(sel, k_vals)
+    log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
+    is_valid = sat_weak_data[0]
+    print(f" =============     SAT solving took time: {sat_weak_data[1]}")
+
+    if not is_valid:
+        #_,_,subset = naive_verify(sel, k_vals)
+        print("Would be naive verifying here, cut that out")
+        timer = My_Timer()
+        timer.start_timer()
+        matrix = Matrix()
+        #matrix.to_matrix(sel, subset)
+        matrix.to_matrix(sel)
+        matrix.m = k
+        matrix.print()
+        vp_tree = VpTree(matrix.matrix)
+        vp_tree.print_vptree()
+        #matrix.sort_rows()
+        #matrix.print()
+        #matrix.k_nn()
+        #matrix.check()
+        timer.stop_timer()
+        print(f" =============     VP tree construction took time: {timer.get_time()}")
+        sel.print_sel()
+        #matrix.shuffle_and_print()
+        done = True
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+#cd_vals = [[12,12], [12,8], [12,4], [8,8], [8,4], [4,4], [3,2], [2,3], [2,2], [2,1], [1,2], [1,1]]
+n_vals = range(100, 1001, 100)
+
+num_iters = 1
 c, d = 3, 3
 
 for i in range(num_iters):
     for n in n_vals: # Cycling through n values
 
-        k = 4
+        k = ceil(sqrt(n))
 
         print("")
         if not logging_data:
             print("[NOT LOGGING DATA]", end='')
-        print("====== n=%d, k=%d ========\n" % (n,k))
+        print(f"====== n={n}, k={k} ========\n", flush=True)
 
         # The set of subset sizes that must be checked for 1/2-goodness in a weakly reducible selector
         k_vals_weak = generate_weak_k_vals(n, k)
 
         # The set of subset sizes that must be checked for 1/2-goodness in a strongly reducible selector
-        """k_vals_strong = range(1, k+1, 1) # The list [1, 2, ..., k]"""
+        k_vals_strong = range(1, k+1, 1) # The list [1, 2, ..., k]
 
         print("weak: ", k_vals_weak)
-        """print("strong: ", k_vals_strong)"""
+        print("strong: ", k_vals_strong)
 
-        sel = prep_sel(n, k, c, d)
+        for iter_ind in range(num_iters): # Generating & testing num_iters different selectors
 
-        sat_weak_data = sat_verify(sel, k_vals_weak)
-        log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
+            sel = prep_sel(n, k, c, d)
 
-        """sat_strong_data = sat_verify(sel, k_vals_strong)
-        log_data(sel, sat_strong_data, SAT_METHOD, STRONG_REDUC)
+            sat_weak_data = sat_verify(sel, k_vals_weak)
+            log_data(sel, sat_weak_data, SAT_METHOD, WEAK_REDUC)
+   
+            sat_strong_data = sat_verify(sel, k_vals_strong)
+            log_data(sel, sat_strong_data, SAT_METHOD, STRONG_REDUC)
 
-        naive_weak_data = naive_verify(sel, k_vals_weak)
-        log_data(sel, naive_weak_data, NAIVE_METHOD, WEAK_REDUC)
+            naive_weak_data = naive_verify(sel, k_vals_weak)
+            log_data(sel, naive_weak_data, NAIVE_METHOD, WEAK_REDUC)
 
-        naive_strong_data = naive_verify(sel, k_vals_strong)
-        log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)"""
+            naive_strong_data = naive_verify(sel, k_vals_strong)
+            log_data(sel, naive_strong_data, NAIVE_METHOD, STRONG_REDUC)
+"""
 
 clean_up()
 print("Successfully terminated")
