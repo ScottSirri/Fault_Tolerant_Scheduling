@@ -89,9 +89,10 @@ if len(sys.argv) > 1:
 now = datetime.now()
 date_time_str = now.strftime("%Y_%m_%d-%H_%M_%S")
 filename = './data/' + date_time_str
-file_obj = open(filename, 'w')
+file_obj = None 
 
 if logging_data:
+    file_obj = open(filename, 'w')
     writer = csv.writer(file_obj)
     header = ['c', 'd', 'n', 'k', 'r', 'gen_time', 'solve_time', 'valid', 'sel_len']
     writer.writerow(header)
