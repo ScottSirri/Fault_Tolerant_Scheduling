@@ -23,15 +23,6 @@ class Wrapper:
 def sort_first(val):
     return val[0]
 
-"""
-def hamming(vec1, vec2):
-    dist = 0
-    for i in range(len(vec1)):
-        if vec1[i] != vec2[i]:
-            dist += 1
-    return dist
-"""
-
 class Matrix:
     def __init__(self, matrix, num_moves):
         self.matrix = matrix
@@ -72,6 +63,18 @@ class Matrix:
 
         for i in range(len(arr)):
             self.matrix[i] = arr[i][1]
+
+    def num_cfs(self, subset):
+        cfs = [0] * self.width
+        for node in subset:
+            for j in range(self.width):
+                cfs[j] += self.matrix[node.vector_index][j]
+        num_cfs = 0
+        for i in cfs:
+            if i == 1:
+                num_cfs += 1
+        return num_cfs
+
 
     def to_matrix(self, sel, subset=None):
         if subset != None:
@@ -128,24 +131,50 @@ class Matrix:
     def print(self):
         self.print_matrix(self.matrix)
 
-    """
-    def check(self):
-        for i in range(self.height):
-            row1 = self.matrix[i]
-            for j in range(i+1, self.height, 1):
-                row2 = self.matrix[j]
-                colliding_rows = True
+    def dist(self, v1, v2):
+        d = 0
+        for i in range(len(v1)):
+            if v1[i] != v2[i]:
+                d += 1
+        return d
 
-                for k in range(self.width):
-                    if row1[k] != row2[k] == 1:
-                        colliding_rows = False
-                        break
-                
-                if colliding_rows:
-                    print(f"========== A PAIR OF COLLIDING ROWS IS FOUND: {i} and {j} ==========")
-                    return True
-        return False
-    """
+    def update(self, neighbors, query_row, new_vec_row):
+        farthest = None
+        farthest_d = -1
+
+        for i in range(len(neighbors)):
+            d = self.dist(self.matrix[neighbors[i]], self.matrix[query_row]) 
+            if d > farthest_d:
+                farthest = neighbors[i]
+                farthest_d = d
+
+        new_d = self.dist(self.matrix[new_vec_row], self.matrix[query_row]) 
+        if new_d < farthest_d:
+            neighbors.remove(farthest)
+            neighbors.append(new_vec_row)
+
+        return farthest
+
+    # TODO : This is somehow bugged, but it's not important
+    def k_nn_brute_force(self, query_row, k):
+
+        neighbors = []
+
+        for i in range(len(self.matrix)):
+
+            if query_row == i:
+                continue
+
+            if len(neighbors) < k:
+                neighbors.append(i)
+                continue
+
+            self.update(neighbors, query_row, i)
+
+        return neighbors
+
+            
+
 
     def find_subsets(self, n, k):
         s = range(1, n+1, 1)
@@ -214,35 +243,6 @@ class Matrix:
                 ball_sets_sizes.append(mat[row_set[i]-1][col])
             exp_cfs += expected_distinct_cfs(div_len, ball_sets_sizes, 50)
         return exp_cfs
-        """
-        if div_len == 1:
-            print(f"\tChecking {row_set}: ",end='')
-            num_coll = 0
-            assert matrix_level == len(self.matrices) - 1
-            for col in range(len(mat[0])):
-                num_balls = 0
-                for i in range(len(row_set)):
-                    row = row_set[i] - 1
-                    if mat[row][col] == 1:
-                        num_balls += 1
-                if num_balls > 1:
-                    print(f"col{col} ",end='')
-                    num_coll += 1
-            print()
-            return num_coll
-        else:
-            assert matrix_level < len(self.matrices) - 1
-
-        exp_coll = 0
-        for col in range(len(mat[0])):
-            ball_sets_sizes = []
-            for i in range(len(row_set)):
-                ball_sets_sizes.append(mat[row_set[i]-1][col])
-            exp_coll += expected_collisions(div_len, ball_sets_sizes, 100)
-
-        return exp_coll
-        """
-
 
     def check(self):
         

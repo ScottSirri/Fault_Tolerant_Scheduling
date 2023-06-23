@@ -8,7 +8,7 @@ import itertools
 from datetime import datetime
 import matrix_code
 from matrix_code import *
-from vp import VpTree
+from vp import *
 
 VALID   = True
 INVALID = False
@@ -459,11 +459,15 @@ def generate_weak_k_vals(n, k):
     #k_vals_weak.append(lowest - 1)  NOT SURE THIS SHOULD BE COMMENTED OUT
     return k_vals_weak
 
-n = 100
-k = 10
+n = 16
+k = 4
 c,d = 1,2
 
 done = False
+
+print(type(5))
+print(type(5.1))
+
 
 while not done:
 
@@ -478,27 +482,38 @@ while not done:
     print(f" =============     SAT solving took time: {sat_weak_data[1]}")
 
     if not is_valid:
-        #_,_,subset = naive_verify(sel, k_vals)
-        print("Would be naive verifying here, cut that out")
+
+        _,_,subset = naive_verify(sel, k_vals)
+        #print("Would be naive verifying here, cut that out")
+
         timer = My_Timer()
         timer.start_timer()
+
         matrix = Matrix()
-        #matrix.to_matrix(sel, subset)
         matrix.to_matrix(sel)
         matrix.m = k
         matrix.print()
-        vp_tree = VpTree(matrix.matrix)
+
+        vp_tree = VPTree(matrix.matrix)
         vp_tree.print_vptree()
-        #matrix.sort_rows()
-        #matrix.print()
-        #matrix.k_nn()
-        #matrix.check()
+        for i in range(matrix.height):
+            closest = vp_tree.k_nn(3, i)
+            print(f"closest len: {len(closest)}")
+            print(f"Closest to {i}:")
+            for node in closest:
+                print(f"\t{node} @ dist {VPTree.hamming(vp_tree.root.vector, node.vector)}")
+            node = None
+            for node_t in vp_tree.nodes:
+                if node_t.vector_index == i:
+                    node = node_t
+            closest_copy = closest.copy()
+            closest_copy.append(node)
+            print(f"\tNumber CFS: {matrix.num_cfs(closest_copy)}")
+            print()
+
         timer.stop_timer()
         print(f" =============     VP tree construction took time: {timer.get_time()}")
-        sel.print_sel()
-        #matrix.shuffle_and_print()
         done = True
-
 
 
 
